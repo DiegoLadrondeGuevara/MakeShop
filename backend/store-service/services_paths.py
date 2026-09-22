@@ -5,6 +5,7 @@ USER_SERVICE_URL = os.getenv("USER_SERVICE_URL", "http://user-service:8080")
 USER_AUTH_BASE_PATH = "/auth"
 SHOP_SERVICE_URL = os.getenv("SHOP_SERVICE_URL", "http://shop-service:3000")
 PRODUCT_SERVICE_URL = os.getenv("PRODUCT_SERVICE_URL", "http://product-service:8000")
+DATA_ANALYST_SERVICE_URL = os.getenv("DATA_ANALYST_SERVICE_URL", "http://data-analyst-service:8005")
 
 
 def user_auth_login_url(shop_id: str | None = None) -> str:
@@ -107,3 +108,7 @@ def product_update_url(shop_id: str, product_id: str) -> str:
 
 def shop_theme_url(shop_id: str) -> str:
 	return f"{SHOP_SERVICE_URL}/shop/{shop_id}/theme"
+
+
+def data_analyst_url(path: str = "") -> str:
+	return f"{DATA_ANALYST_SERVICE_URL}{path}"

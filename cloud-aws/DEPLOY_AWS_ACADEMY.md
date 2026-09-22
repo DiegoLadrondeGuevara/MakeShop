@@ -4,6 +4,7 @@ Esta ruta usa:
 
 - EC2 + Docker Compose para `backend/` y `database/`.
 - Application Load Balancer + API Gateway HTTP para exponer `store-service`.
+- Target groups/listeners independientes para `8080` (user), `3000` (shop), `8000` (product), `8004` (store) y `8005` (data analyst).
 - AWS Amplify para `frontend/`.
 - S3 para imagenes de productos.
 - Glue/Athena opcional para analytics e ingesta.
@@ -19,7 +20,7 @@ Necesitas pasar o reemplazar en `cloud-aws/.env`:
 - `FRONTEND_AMPLIFY_ACCESS_TOKEN`: token de GitHub para que Amplify conecte el repo
 - `FRONTEND_REPO_URL`: URL del repo que Amplify y las EC2 van a clonar
 - `FRONTEND_BRANCH_NAME`: normalmente `main`
-- `DOCKER_IMAGE_NAMESPACE`: usuario/namespace de Docker Hub donde estan las imagenes `user-service`, `shop-service`, `store-service`, `product-service`
+- `DOCKER_IMAGE_NAMESPACE`: usuario/namespace de Docker Hub donde estan las imagenes `user-service`, `shop-service`, `store-service`, `product-service`, `data-analyst-service`
 - `DOCKER_IMAGE_TAG`: normalmente `latest`
 
 Para esta cuenta Docker Hub ya existen las imagenes bajo `diegoladrondeguevara`:
@@ -35,6 +36,7 @@ Imagenes publicadas:
 - `diegoladrondeguevara/shop-service:latest`
 - `diegoladrondeguevara/store-service:latest`
 - `diegoladrondeguevara/product-service:latest`
+- `diegoladrondeguevara/data-analyst-service:latest`
 
 Si quieres desplegar tus propias imagenes, debes configurar en GitHub los secretos:
 
@@ -47,6 +49,7 @@ Luego haz push a `main` o ejecuta manualmente el workflow **Build and Push Docke
 - `${DOCKERHUB_USERNAME}/shop-service:latest`
 - `${DOCKERHUB_USERNAME}/store-service:latest`
 - `${DOCKERHUB_USERNAME}/product-service:latest`
+- `${DOCKERHUB_USERNAME}/data-analyst-service:latest`
 
 El valor de `DOCKER_IMAGE_NAMESPACE` en `cloud-aws/.env` debe coincidir con `DOCKERHUB_USERNAME`.
 
@@ -123,6 +126,8 @@ El output `FrontendAmplifyURL` es la URL publica. Si Amplify aun esta compilando
 
 La variable `VITE_LOAD_BALANCER_API` se configura automaticamente con el `HttpApiEndpoint`.
 
+El frontend usa el gateway en `8004`; el servicio analitico se consume mediante las rutas `/analytics/owner/*`, mientras que `8005` queda disponible en el ALB como listener/target group dedicado para operacion y health checks.
+
 ## 6. Glue/Athena opcional
 
 Despues del stack principal puedes crear analytics:
@@ -137,7 +142,7 @@ aws cloudformation deploy \
 
 Luego actualiza `dataingest/.env` con:
 
-- `POSTGRES_HOST`, `MYSQL_HOST` y `MONGO_URI` usando `DbServerPrivateIP`
+- `POSTGRES_HOST`, `MYSQL_HOST` y `MONGO_URI` usando `DbServerElasticIP`
 - `S3_BUCKET=openstore-ingest-TU_ACCOUNT_ID`
 - credenciales temporales de AWS Academy
 

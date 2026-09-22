@@ -5,6 +5,7 @@ import { PublicLayout } from './components/PublicLayout';
 import HomePage from './pages/home/HomePage';
 import AdminPanel from './pages/client/AdminPanel';
 import OwnerPanel from './pages/owner/OwnerPanel';
+import OwnerAnalyticsPage from './pages/owner/OwnerAnalyticsPage';
 import ProfilePage from './pages/profile/ProfilePage';
 import LoginPage from './pages/auth/LoginPage';
 import SignupPage from './pages/auth/SignupPage';
@@ -26,6 +27,7 @@ function App() {
           <Route element={<ProtectedRoute />}>
             <Route element={<AppLayout />}>
               <Route path="/owner" element={<OwnerPanel />} />
+              <Route path="/owner/analytics" element={<OwnerAnalyticsPage />} />
               <Route path="/admin" element={<AdminPanel />} />
               <Route path="/profile" element={<ProfilePage />} />
             </Route>

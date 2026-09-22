@@ -97,6 +97,10 @@ Resources:
           FromPort: 8004
           ToPort: 8004
           CidrIp: "0.0.0.0/0"
+        - IpProtocol: "tcp"
+          FromPort: 8005
+          ToPort: 8005
+          CidrIp: "0.0.0.0/0"
 
   AppServerSecurityGroup:
     Type: "AWS::EC2::SecurityGroup"
@@ -119,6 +123,10 @@ Resources:
         - IpProtocol: "tcp"
           FromPort: 8004
           ToPort: 8004
+          SourceSecurityGroupId: !Ref LoadBalancerSecurityGroup
+        - IpProtocol: "tcp"
+          FromPort: 8005
+          ToPort: 8005
           SourceSecurityGroupId: !Ref LoadBalancerSecurityGroup
         - IpProtocol: "tcp"
           FromPort: 8004
@@ -252,10 +260,138 @@ Resources:
         - Type: "forward"
           TargetGroupArn: !Ref StoreTargetGroup
 
+  StoreListener:
+    Type: "AWS::ElasticLoadBalancingV2::Listener"
+    Properties:
+      LoadBalancerArn: !Ref ApplicationLoadBalancer
+      Port: 8004
+      Protocol: "HTTP"
+      DefaultActions:
+        - Type: "forward"
+          TargetGroupArn: !Ref StoreTargetGroup
+
+  UserTargetGroup:
+    Type: "AWS::ElasticLoadBalancingV2::TargetGroup"
+    Properties:
+      Name: "os-user-tg"
+      VpcId: !Ref VpcId
+      Protocol: "HTTP"
+      Port: 8080
+      TargetType: "instance"
+      HealthCheckProtocol: "HTTP"
+      HealthCheckPort: "traffic-port"
+      HealthCheckPath: "/health"
+      Matcher:
+        HttpCode: "200-399"
+      Targets:
+        - Id: !Ref AppServer1
+          Port: 8080
+        - Id: !Ref AppServer2
+          Port: 8080
+
+  ShopTargetGroup:
+    Type: "AWS::ElasticLoadBalancingV2::TargetGroup"
+    Properties:
+      Name: "os-shop-tg"
+      VpcId: !Ref VpcId
+      Protocol: "HTTP"
+      Port: 3000
+      TargetType: "instance"
+      HealthCheckProtocol: "HTTP"
+      HealthCheckPort: "traffic-port"
+      HealthCheckPath: "/health"
+      Matcher:
+        HttpCode: "200-399"
+      Targets:
+        - Id: !Ref AppServer1
+          Port: 3000
+        - Id: !Ref AppServer2
+          Port: 3000
+
+  ProductTargetGroup:
+    Type: "AWS::ElasticLoadBalancingV2::TargetGroup"
+    Properties:
+      Name: "os-product-tg"
+      VpcId: !Ref VpcId
+      Protocol: "HTTP"
+      Port: 8000
+      TargetType: "instance"
+      HealthCheckProtocol: "HTTP"
+      HealthCheckPort: "traffic-port"
+      HealthCheckPath: "/healthcheck"
+      Matcher:
+        HttpCode: "200-399"
+      Targets:
+        - Id: !Ref AppServer1
+          Port: 8000
+        - Id: !Ref AppServer2
+          Port: 8000
+
+  DataAnalystTargetGroup:
+    Type: "AWS::ElasticLoadBalancingV2::TargetGroup"
+    Properties:
+      Name: "os-data-tg"
+      VpcId: !Ref VpcId
+      Protocol: "HTTP"
+      Port: 8005
+      TargetType: "instance"
+      HealthCheckProtocol: "HTTP"
+      HealthCheckPort: "traffic-port"
+      HealthCheckPath: "/health"
+      Matcher:
+        HttpCode: "200-399"
+      Targets:
+        - Id: !Ref AppServer1
+          Port: 8005
+        - Id: !Ref AppServer2
+          Port: 8005
+
+  UserListener:
+    Type: "AWS::ElasticLoadBalancingV2::Listener"
+    Properties:
+      LoadBalancerArn: !Ref ApplicationLoadBalancer
+      Port: 8080
+      Protocol: "HTTP"
+      DefaultActions:
+        - Type: "forward"
+          TargetGroupArn: !Ref UserTargetGroup
+
+  ShopListener:
+    Type: "AWS::ElasticLoadBalancingV2::Listener"
+    Properties:
+      LoadBalancerArn: !Ref ApplicationLoadBalancer
+      Port: 3000
+      Protocol: "HTTP"
+      DefaultActions:
+        - Type: "forward"
+          TargetGroupArn: !Ref ShopTargetGroup
+
+  ProductListener:
+    Type: "AWS::ElasticLoadBalancingV2::Listener"
+    Properties:
+      LoadBalancerArn: !Ref ApplicationLoadBalancer
+      Port: 8000
+      Protocol: "HTTP"
+      DefaultActions:
+        - Type: "forward"
+          TargetGroupArn: !Ref ProductTargetGroup
+
+  DataAnalystListener:
+    Type: "AWS::ElasticLoadBalancingV2::Listener"
+    Properties:
+      LoadBalancerArn: !Ref ApplicationLoadBalancer
+      Port: 8005
+      Protocol: "HTTP"
+      DefaultActions:
+        - Type: "forward"
+          TargetGroupArn: !Ref DataAnalystTargetGroup
+
 
   AppServer1:
     Type: "AWS::EC2::Instance"
-    DependsOn: DbServer
+    DependsOn:
+      - DbServer
+      - DbServerElasticIPAssociation
     Properties:
       Tags:
         - Key: "Name"
@@ -288,11 +424,11 @@ Resources:
           cat > .env <<EOF
           DOCKER_IMAGE_NAMESPACE=${DockerImageNamespace}
           DOCKER_IMAGE_TAG=${DockerImageTag}
-          DB_HOST=${DbServer.PrivateIp}
+          DB_HOST=${DbServerElasticAddress}
           POSTGRES_DB=userdb
           POSTGRES_USER=admin
           POSTGRES_PASSWORD=admin123
-          DATABASE_URL=jdbc:postgresql://${DbServer.PrivateIp}:5432/userdb
+          DATABASE_URL=jdbc:postgresql://${DbServerElasticAddress}:5432/userdb
           DB_USERNAME=admin
           DB_PASSWORD=admin123
           DB_NAME=userdb
@@ -313,6 +449,8 @@ Resources:
           BUCKET_NAME=${ImagesBucket}
           ATHENA_DATABASE=openstore_catalog
           ATHENA_RESULTS_BUCKET=s3://openstore-ingest-${AWS::AccountId}/athena-results/
+          ATHENA_WORKGROUP=openstore-workgroup
+          DATA_ANALYST_SERVICE_URL=http://data-analyst-service:8005
           EOF
           docker compose pull
           docker compose up -d
@@ -323,7 +461,9 @@ Resources:
 
   AppServer2:
     Type: "AWS::EC2::Instance"
-    DependsOn: DbServer
+    DependsOn:
+      - DbServer
+      - DbServerElasticIPAssociation
     Properties:
       Tags:
         - Key: "Name"
@@ -356,11 +496,11 @@ Resources:
           cat > .env <<EOF
           DOCKER_IMAGE_NAMESPACE=${DockerImageNamespace}
           DOCKER_IMAGE_TAG=${DockerImageTag}
-          DB_HOST=${DbServer.PrivateIp}
+          DB_HOST=${DbServerElasticAddress}
           POSTGRES_DB=userdb
           POSTGRES_USER=admin
           POSTGRES_PASSWORD=admin123
-          DATABASE_URL=jdbc:postgresql://${DbServer.PrivateIp}:5432/userdb
+          DATABASE_URL=jdbc:postgresql://${DbServerElasticAddress}:5432/userdb
           DB_USERNAME=admin
           DB_PASSWORD=admin123
           DB_NAME=userdb
@@ -381,6 +521,8 @@ Resources:
           BUCKET_NAME=${ImagesBucket}
           ATHENA_DATABASE=openstore_catalog
           ATHENA_RESULTS_BUCKET=s3://openstore-ingest-${AWS::AccountId}/athena-results/
+          ATHENA_WORKGROUP=openstore-workgroup
+          DATA_ANALYST_SERVICE_URL=http://data-analyst-service:8005
           EOF
           docker compose pull
           docker compose up -d
@@ -438,6 +580,24 @@ Resources:
           EOF
           docker compose up -d
           cd ..
+
+  DbServerElasticAddress:
+    Type: "AWS::EC2::EIP"
+    DependsOn: DbServer
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      Domain: "vpc"
+      Tags:
+        - Key: "Name"
+          Value: !Sub "${InstanceName}-DB-EIP"
+
+  DbServerElasticIPAssociation:
+    Type: "AWS::EC2::EIPAssociation"
+    DependsOn: DbServer
+    Properties:
+      AllocationId: !GetAtt DbServerElasticAddress.AllocationId
+      InstanceId: !Ref DbServer
 
   ImagesBucket:
     Type: "AWS::S3::Bucket"
@@ -524,8 +684,11 @@ Outputs:
     Description: "IP publica del App Server 2"
     Value: !GetAtt AppServer2.PublicIp
   DbServerPublicIP:
-    Description: "IP publica del DB Server"
-    Value: !GetAtt DbServer.PublicIp
+    Description: "Elastic IP publica y estable del DB Server"
+    Value: !Ref DbServerElasticAddress
+  DbServerElasticIP:
+    Description: "Elastic IP publica y estable usada por los microservicios y la ingesta"
+    Value: !Ref DbServerElasticAddress
   DbServerPrivateIP:
     Description: "IP privada del DB Server para backend e ingesta"
     Value: !GetAtt DbServer.PrivateIp

@@ -1,5 +1,5 @@
 import React from 'react';
-import { Users, Settings, LayoutDashboard, Store } from 'lucide-react';
+import { Users, Settings, LayoutDashboard, Store, BarChart3 } from 'lucide-react';
 import { NavLink } from 'react-router-dom';
 
 export const Sidebar: React.FC = () => {
@@ -15,6 +15,11 @@ export const Sidebar: React.FC = () => {
         <NavLink to="/owner" className={({ isActive }: { isActive: boolean }) => `nav-item ${isActive ? 'active' : ''}`}>
           <LayoutDashboard size={20} />
           <span>Dashboard</span>
+        </NavLink>
+
+        <NavLink to="/owner/analytics" className={({ isActive }: { isActive: boolean }) => `nav-item ${isActive ? 'active' : ''}`}>
+          <BarChart3 size={20} />
+          <span>Analytics</span>
         </NavLink>
 
         <NavLink to="/admin" className={({ isActive }: { isActive: boolean }) => `nav-item ${isActive ? 'active' : ''}`}>

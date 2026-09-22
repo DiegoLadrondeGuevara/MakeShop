@@ -22,6 +22,7 @@ def extract_products(collection) -> list:
             "image_url": str(doc.get("image_url") or doc.get("imageUrl") or ""),
             "availability": doc.get("availability", ""),
             "shop_id": str(doc.get("shop_id") or doc.get("shopId") or ""),
+            "created_at": doc.get("created_at") or doc.get("createdAt") or "",
         })
     return records
 

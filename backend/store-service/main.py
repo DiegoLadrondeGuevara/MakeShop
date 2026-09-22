@@ -1,10 +1,8 @@
 from typing import Any
 import os
-import time
 
-import boto3
 import httpx
-from fastapi import FastAPI, Header, HTTPException, Request
+from fastapi import FastAPI, Header, HTTPException, Query, Request
 from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
 from fastapi.middleware.cors import CORSMiddleware
@@ -47,49 +45,8 @@ from services_paths import (
 	product_list_by_shop_url,
 	product_create_url,
 	product_update_url,
+	data_analyst_url,
 )
-
-ATHENA_DATABASE = os.getenv("ATHENA_DATABASE", "openstore_catalog")
-ATHENA_RESULTS_BUCKET = os.getenv("ATHENA_RESULTS_BUCKET", "s3://openstore-ingest-637423414138/athena-results/")
-AWS_REGION = os.getenv("AWS_REGION", "us-east-1")
-
-
-def _run_athena_query(sql: str) -> list[dict]:
-	client = boto3.client(
-		"athena",
-		region_name=AWS_REGION,
-		aws_access_key_id=os.getenv("AWS_ACCESS_KEY_ID"),
-		aws_secret_access_key=os.getenv("AWS_SECRET_ACCESS_KEY"),
-		aws_session_token=os.getenv("AWS_SESSION_TOKEN"),
-	)
-	response = client.start_query_execution(
-		QueryString=sql,
-		QueryExecutionContext={"Database": ATHENA_DATABASE},
-		ResultConfiguration={"OutputLocation": ATHENA_RESULTS_BUCKET},
-	)
-	execution_id = response["QueryExecutionId"]
-	for _ in range(30):
-		status = client.get_query_execution(QueryExecutionId=execution_id)
-		state = status["QueryExecution"]["Status"]["State"]
-		if state == "SUCCEEDED":
-			break
-		if state in ("FAILED", "CANCELLED"):
-			reason = status["QueryExecution"]["Status"].get("StateChangeReason", "")
-			raise HTTPException(status_code=500, detail=f"Athena query failed: {reason}")
-		time.sleep(1)
-	else:
-		raise HTTPException(status_code=504, detail="Athena query timeout")
-
-	results = client.get_query_results(QueryExecutionId=execution_id)
-	rows = results["ResultSet"]["Rows"]
-	if len(rows) < 2:
-		return []
-	headers = [col["VarCharValue"] for col in rows[0]["Data"]]
-	return [
-		{headers[i]: col.get("VarCharValue", "") for i, col in enumerate(row["Data"])}
-		for row in rows[1:]
-	]
-
 
 _OPENAPI_TAGS_METADATA = [
 	{"name": "Salud", "description": "Comprobaciones de vida del servicio."},
@@ -678,63 +635,98 @@ async def get_owner_shops(
 	return result
 
 
-@app.get("/analytics/productos-por-tienda", tags=["Analytics"], summary="Top tiendas por número de productos")
-async def analytics_productos_por_tienda():
-	sql = """
-		SELECT s.name AS shop_name,
-		       COUNT(DISTINCT p.id) AS total_products
-		FROM shops_data s
-		LEFT JOIN products p ON p.shopid = s.id
-		GROUP BY s.name
-		ORDER BY total_products DESC
-		LIMIT 20
-	"""
-	return _run_athena_query(sql)
+@app.get("/analytics/owner/summary", tags=["Analytics"], summary="Resumen analitico del owner")
+async def analytics_owner_summary(
+	from_date: str | None = Query(default=None, alias="from"),
+	to_date: str | None = Query(default=None, alias="to"),
+	shop_id: str | None = Query(default=None, alias="shopId"),
+	authorization: str | None = Header(default=None),
+) -> Any:
+	path = _analytics_query_path("/analytics/owner/summary", from_date, to_date, shop_id)
+	return await _forward(
+		"GET",
+		data_analyst_url(path),
+		authorization=authorization,
+	)
 
 
-@app.get("/analytics/usuarios-por-tienda", tags=["Analytics"], summary="Usuarios asignados por tienda")
-async def analytics_usuarios_por_tienda():
-	sql = """
-		SELECT s.name AS shop_name,
-		       COUNT(DISTINCT u.id) AS total_users
-		FROM shops_data s
-		LEFT JOIN users u ON u.shop_id = s.id
-		GROUP BY s.name
-		ORDER BY total_users DESC
-		LIMIT 20
-	"""
-	return _run_athena_query(sql)
+def _analytics_query_path(path: str, from_date: str | None, to_date: str | None, shop_id: str | None) -> str:
+	from urllib.parse import urlencode
+
+	params = [("from", from_date), ("to", to_date), ("shopId", shop_id)]
+	query = urlencode([(key, value) for key, value in params if value])
+	return f"{path}?{query}" if query else path
 
 
-@app.get("/analytics/membresias-por-tienda", tags=["Analytics"], summary="Membresías por tienda")
-async def analytics_membresias_por_tienda():
-	sql = """
-		SELECT s.name AS shop_name,
-		       COUNT(m.id) AS total_memberships
-		FROM shops_data s
-		LEFT JOIN memberships_data m ON m.shop_id = s.id
-		GROUP BY s.name
-		ORDER BY total_memberships DESC
-		LIMIT 20
-	"""
-	return _run_athena_query(sql)
+@app.get("/analytics/owner/shops", tags=["Analytics"], summary="Metricas por tienda del owner")
+async def analytics_owner_shops(
+	from_date: str | None = Query(default=None, alias="from"),
+	to_date: str | None = Query(default=None, alias="to"),
+	shop_id: str | None = Query(default=None, alias="shopId"),
+	authorization: str | None = Header(default=None),
+) -> Any:
+	path = _analytics_query_path("/analytics/owner/shops", from_date, to_date, shop_id)
+	return await _forward("GET", data_analyst_url(path), authorization=authorization)
 
 
-@app.get("/analytics/resumen-tiendas", tags=["Analytics"], summary="Resumen completo por tienda")
-async def analytics_resumen_tiendas():
-	sql = """
-		SELECT shop_name, total_products, total_users
-		FROM v_tienda_resumen
-		ORDER BY total_products DESC
-		LIMIT 20
-	"""
-	return _run_athena_query(sql)
+@app.get("/analytics/owner/trend", tags=["Analytics"], summary="Tendencia de registros del owner")
+async def analytics_owner_trend(
+	from_date: str | None = Query(default=None, alias="from"),
+	to_date: str | None = Query(default=None, alias="to"),
+	shop_id: str | None = Query(default=None, alias="shopId"),
+	authorization: str | None = Header(default=None),
+) -> Any:
+	path = _analytics_query_path("/analytics/owner/trend", from_date, to_date, shop_id)
+	return await _forward("GET", data_analyst_url(path), authorization=authorization)
+
+
+@app.get("/analytics/owner/products", tags=["Analytics"], summary="Productos del owner")
+async def analytics_owner_products(
+	shop_id: str | None = Query(default=None, alias="shopId"),
+	limit: int = Query(default=50, ge=1, le=200),
+	authorization: str | None = Header(default=None),
+) -> Any:
+	path = _analytics_query_path("/analytics/owner/products", None, None, shop_id)
+	separator = "&" if "?" in path else "?"
+	path = f"{path}{separator}limit={max(1, min(limit, 200))}"
+	return await _forward("GET", data_analyst_url(path), authorization=authorization)
+
+
+@app.get("/analytics/owner/catalog-health", tags=["Analytics"], summary="Calidad del catalogo del owner")
+async def analytics_owner_catalog_health(
+	shop_id: str | None = Query(default=None, alias="shopId"),
+	authorization: str | None = Header(default=None),
+) -> Any:
+	path = _analytics_query_path("/analytics/owner/catalog-health", None, None, shop_id)
+	return await _forward("GET", data_analyst_url(path), authorization=authorization)
+
+
+# Rutas antiguas conservadas por compatibilidad. Ya no ejecutan SQL directamente
+# en el gateway ni exponen datos globales sin validar el owner.
+@app.get("/analytics/productos-por-tienda", tags=["Analytics"], include_in_schema=False)
+async def legacy_analytics_productos(authorization: str | None = Header(default=None)) -> Any:
+	return await _forward("GET", data_analyst_url("/analytics/owner/shops"), authorization=authorization)
+
+
+@app.get("/analytics/usuarios-por-tienda", tags=["Analytics"], include_in_schema=False)
+async def legacy_analytics_usuarios(authorization: str | None = Header(default=None)) -> Any:
+	return await _forward("GET", data_analyst_url("/analytics/owner/shops"), authorization=authorization)
+
+
+@app.get("/analytics/membresias-por-tienda", tags=["Analytics"], include_in_schema=False)
+async def legacy_analytics_membresias(authorization: str | None = Header(default=None)) -> Any:
+	return await _forward("GET", data_analyst_url("/analytics/owner/shops"), authorization=authorization)
+
+
+@app.get("/analytics/resumen-tiendas", tags=["Analytics"], include_in_schema=False)
+async def legacy_analytics_summary(authorization: str | None = Header(default=None)) -> Any:
+	return await _forward("GET", data_analyst_url("/analytics/owner/shops"), authorization=authorization)
 
 
 @app.get("/docs/mappings", response_class=HTMLResponse, tags=["Utilidades"], include_in_schema=False)
 async def docs_mappings(request: Request) -> HTMLResponse:
 	"""Página HTML con enlaces a la documentación OpenAPI/Swagger de cada microservicio."""
-	from services_paths import SHOP_SERVICE_URL, PRODUCT_SERVICE_URL, USER_SERVICE_URL
+	from services_paths import DATA_ANALYST_SERVICE_URL, SHOP_SERVICE_URL, PRODUCT_SERVICE_URL, USER_SERVICE_URL
 
 	store_public_url = str(request.base_url).rstrip("/")
 	services = [
@@ -749,6 +741,11 @@ async def docs_mappings(request: Request) -> HTMLResponse:
 			"name": "User Service",
 			"url": f"{USER_SERVICE_URL}/swagger-ui/index.html",
 			"note": "Usuarios y auth (Spring)",
+		},
+		{
+			"name": "Data Analyst Service",
+			"url": f"{DATA_ANALYST_SERVICE_URL}/docs",
+			"note": "Filtros, comparaciones y metricas Athena por owner",
 		},
 	]
 
