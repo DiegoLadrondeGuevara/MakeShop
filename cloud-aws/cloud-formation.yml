@@ -413,7 +413,7 @@ Resources:
           set -euxo pipefail
           exec > /var/log/user-data.log 2>&1
           apt-get update
-          DEBIAN_FRONTEND=noninteractive apt-get install -y docker.io docker-compose-plugin git
+          DEBIAN_FRONTEND=noninteractive apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin git
           systemctl enable --now docker
           usermod -aG docker ubuntu || true
           cd /home/ubuntu
@@ -485,7 +485,7 @@ Resources:
           set -euxo pipefail
           exec > /var/log/user-data.log 2>&1
           apt-get update
-          DEBIAN_FRONTEND=noninteractive apt-get install -y docker.io docker-compose-plugin git
+          DEBIAN_FRONTEND=noninteractive apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin git
           systemctl enable --now docker
           usermod -aG docker ubuntu || true
           cd /home/ubuntu
@@ -555,7 +555,7 @@ Resources:
           set -euxo pipefail
           exec > /var/log/user-data.log 2>&1
           apt-get update
-          DEBIAN_FRONTEND=noninteractive apt-get install -y docker.io docker-compose-plugin git
+          DEBIAN_FRONTEND=noninteractive apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin git
           systemctl enable --now docker
           usermod -aG docker ubuntu || true
           cd /home/ubuntu
