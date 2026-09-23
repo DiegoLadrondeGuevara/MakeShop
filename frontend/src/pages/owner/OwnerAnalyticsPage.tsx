@@ -3,6 +3,7 @@ import {
   Activity,
   AlertTriangle,
   BarChart3,
+  ChartNoAxesCombined,
   CalendarDays,
   Package,
   RefreshCw,
@@ -116,6 +117,16 @@ export default function OwnerAnalyticsPage() {
   const variation = previousRegistered === 0 ? (registered > 0 ? 100 : 0) : ((registered - previousRegistered) / previousRegistered) * 100;
   const availabilityRate = numberValue(summary.total_products) === 0 ? 0 : (numberValue(summary.available_products) / numberValue(summary.total_products)) * 100;
   const maxTrend = Math.max(...trend.map((row) => numberValue(row.registered_users)), 1);
+  const trendTotal = trend.reduce((total, row) => total + numberValue(row.registered_users), 0);
+  const trendAverage = trend.length ? trendTotal / trend.length : 0;
+  const peakTrend = trend.reduce<{ period: string; value: number } | null>((peak, row) => {
+    const value = numberValue(row.registered_users);
+    return !peak || value > peak.value ? { period: row.period, value } : peak;
+  }, null);
+  const firstTrendValue = trend.length ? numberValue(trend[0].registered_users) : 0;
+  const lastTrendValue = trend.length ? numberValue(trend[trend.length - 1].registered_users) : 0;
+  const trendDirection = lastTrendValue - firstTrendValue;
+  const trendDirectionPercent = firstTrendValue === 0 ? (lastTrendValue > 0 ? 100 : 0) : (trendDirection / firstTrendValue) * 100;
   const selectedShopName = filters.shopId ? getShopName(shops.find((shop) => getShopId(shop) === filters.shopId) ?? {}) : 'Todas las tiendas';
 
   const insight = useMemo(() => {
@@ -158,13 +169,27 @@ export default function OwnerAnalyticsPage() {
       <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1.35fr) minmax(280px, 0.65fr)', gap: '1.25rem', alignItems: 'start' }}>
         <section className="card" style={{ padding: '1.1rem' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', gap: '1rem', alignItems: 'start' }}>
-            <div><h2 style={{ margin: 0, fontSize: '1.05rem' }}>Altas de clientes</h2><p style={{ color: 'var(--text-secondary)', fontSize: '0.8rem', margin: '0.35rem 0 1.2rem' }}>Comparacion contra los {summary.registered_in_previous_period} registros del periodo anterior.</p></div>
-            <div style={{ color: variation >= 0 ? '#22c55e' : '#ef4444', display: 'flex', alignItems: 'center', gap: '0.25rem', fontWeight: 700 }}>{variation >= 0 ? <TrendingUp size={17} /> : <TrendingDown size={17} />}{variation.toFixed(0)}%</div>
+            <div><div style={{ display: 'flex', alignItems: 'center', gap: '0.45rem' }}><ChartNoAxesCombined size={18} color="var(--primary)" /><h2 style={{ margin: 0, fontSize: '1.05rem' }}>Evolucion de altas</h2></div><p style={{ color: 'var(--text-secondary)', fontSize: '0.8rem', margin: '0.35rem 0 1.2rem' }}>Nuevos clientes registrados por fecha. Comparacion contra los {summary.registered_in_previous_period} del periodo anterior.</p></div>
+            <div style={{ color: variation >= 0 ? '#16a34a' : '#dc2626', display: 'flex', alignItems: 'center', gap: '0.25rem', fontWeight: 750, whiteSpace: 'nowrap' }}>{variation >= 0 ? <TrendingUp size={17} /> : <TrendingDown size={17} />}{variation.toFixed(0)}%</div>
           </div>
-          <div style={{ display: 'flex', alignItems: 'end', gap: '0.35rem', height: 170, borderBottom: '1px solid var(--border-color)', padding: '0 0.25rem' }}>
-            {trend.length === 0 ? <div style={{ color: 'var(--text-secondary)', fontSize: '0.85rem' }}>No hay registros en este periodo.</div> : trend.map((row) => { const value = numberValue(row.registered_users); return <div key={row.period} title={`${row.period}: ${value}`} style={{ flex: 1, minWidth: 4, height: `${Math.max((value / maxTrend) * 100, 3)}%`, background: 'var(--primary)', opacity: 0.9, borderRadius: '4px 4px 0 0' }} />; })}
-          </div>
-          <div style={{ display: 'flex', justifyContent: 'space-between', color: 'var(--text-secondary)', fontSize: '0.72rem', marginTop: '0.45rem' }}><span>{trend[0]?.period ?? filters.from}</span><span>{trend[trend.length - 1]?.period ?? filters.to}</span></div>
+          {trend.length === 0 ? <div style={{ minHeight: 220, display: 'grid', placeItems: 'center', color: 'var(--text-secondary)', fontSize: '0.85rem' }}>No hay registros en este periodo.</div> : <>
+            <div style={{ display: 'grid', gridTemplateColumns: 'auto 1fr', gap: '0.7rem', minHeight: 230 }}>
+              <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'space-between', padding: '0.25rem 0', color: 'var(--text-secondary)', fontSize: '0.7rem', textAlign: 'right' }}><span>{maxTrend}</span><span>{Math.ceil(maxTrend / 2)}</span><span>0</span></div>
+              <div style={{ position: 'relative', minWidth: 0 }}>
+                <svg viewBox="0 0 720 220" role="img" aria-label="Evolucion de altas de clientes" style={{ width: '100%', height: 220, display: 'block', overflow: 'visible' }} preserveAspectRatio="none">
+                  {[0, 1, 2].map((line) => <line key={line} x1="0" x2="720" y1={line * 100 + 10} y2={line * 100 + 10} stroke="var(--border-color)" strokeDasharray="4 5" />)}
+                  {(() => { const width = Math.max(trend.length - 1, 1); const points = trend.map((row, index) => { const value = numberValue(row.registered_users); const x = (index / width) * 720; const y = 210 - (value / maxTrend) * 190; return { ...row, value, x, y }; }); const line = points.map((point) => `${point.x},${point.y}`).join(' '); const area = `0,210 ${line} 720,210`; return <><polygon points={area} fill="rgba(154,205,50,0.18)" /><polyline points={line} fill="none" stroke="var(--primary)" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round" />{points.map((point) => <circle key={point.period} cx={point.x} cy={point.y} r="6" fill="var(--card-bg, #fff)" stroke="var(--primary)" strokeWidth="3"><title>{`${point.period}: ${point.value} altas`}</title></circle>)}</>; })()}
+                </svg>
+                <div style={{ display: 'flex', justifyContent: 'space-between', color: 'var(--text-secondary)', fontSize: '0.7rem', marginTop: '-0.1rem' }}><span>{trend[0]?.period ?? filters.from}</span><span>{trend[trend.length - 1]?.period ?? filters.to}</span></div>
+              </div>
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: '0.55rem', marginTop: '0.85rem' }}>
+              <div style={{ padding: '0.7rem', background: 'rgba(154,205,50,0.1)', borderRadius: 6 }}><div style={{ color: 'var(--text-secondary)', fontSize: '0.7rem' }}>Altas del periodo</div><strong style={{ fontSize: '1.15rem' }}>{trendTotal}</strong></div>
+              <div style={{ padding: '0.7rem', background: 'rgba(154,205,50,0.1)', borderRadius: 6 }}><div style={{ color: 'var(--text-secondary)', fontSize: '0.7rem' }}>Promedio por fecha</div><strong style={{ fontSize: '1.15rem' }}>{trendAverage.toFixed(1)}</strong></div>
+              <div style={{ padding: '0.7rem', background: 'rgba(154,205,50,0.1)', borderRadius: 6 }}><div style={{ color: 'var(--text-secondary)', fontSize: '0.7rem' }}>Pico de altas</div><strong style={{ fontSize: '1.15rem' }}>{peakTrend?.value ?? 0}</strong><div style={{ color: 'var(--text-secondary)', fontSize: '0.68rem' }}>{peakTrend?.period ?? '-'}</div></div>
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', gap: '0.75rem', marginTop: '0.7rem', color: 'var(--text-secondary)', fontSize: '0.75rem' }}><span>{trendDirection >= 0 ? 'La tendencia termina al alza' : 'La tendencia termina a la baja'}</span><strong style={{ color: trendDirection >= 0 ? '#16a34a' : '#dc2626' }}>{trendDirectionPercent.toFixed(0)}% vs. inicio</strong></div>
+          </>}
         </section>
 
         <section className="card" style={{ padding: '1.1rem' }}>
