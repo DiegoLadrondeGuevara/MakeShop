@@ -1,19 +1,22 @@
 AWSTemplateFormatVersion: "2010-09-09"
-Description: "MakeShop: 2 App Servers detrás de ALB, 1 DB Server y bucket S3 "
+Description: "MakeShop: API Gateway HTTPS, ALB interno y bases de datos privadas"
 
 Parameters:
   InstanceName:
     Type: String
     Default: "MV-MakeShop"
-    Description: "Maquina Virtual 1"
+    Description: "Prefijo de nombre para las instancias"
+
   AMI:
     Type: String
     Default: "ami-08d434e92c0cfa0c0"
     Description: "ID de AMI"
+
   KeyName:
     Type: AWS::EC2::KeyPair::KeyName
     Default: "vockey"
-    Description: "KeyPair para acceso SSH (opcional)"
+    Description: "KeyPair para acceso administrativo"
+
   InstanceType:
     Type: String
     Default: "t3.medium"
@@ -23,6 +26,7 @@ Parameters:
       - "t3.small"
       - "t3.medium"
     Description: "Tipo de instancia para App Servers"
+
   DbInstanceType:
     Type: String
     Default: "t3.medium"
@@ -32,78 +36,102 @@ Parameters:
       - "t3.medium"
       - "t3.large"
     Description: "Tipo de instancia para DB Server"
+
   VpcId:
     Type: AWS::EC2::VPC::Id
     Description: "VPC donde desplegar los recursos"
+
   PublicSubnet1:
     Type: AWS::EC2::Subnet::Id
-    Description: "Subnet pública 1 (para ALB y EC2 con IP pública)"
+    Description: "Subnet 1 para App Server, ALB interno y VPC Link"
+
   PublicSubnet2:
     Type: AWS::EC2::Subnet::Id
-    Description: "Subnet pública 2 (para ALB y EC2 con IP pública)"
+    Description: "Subnet 2 para App Server, ALB interno y VPC Link"
+
+
+
+
   FrontendRepoUrl:
     Type: String
     Default: "https://github.com/Lazheart/MakeShop"
-    Description: "Repositorio Git para Amplify (publico o privado)"
+    Description: "Repositorio Git para Amplify"
+
   FrontendBranchName:
     Type: String
     Default: "main"
     Description: "Branch del repositorio a desplegar en Amplify"
+
   FrontendAmplifyAppName:
     Type: String
     Default: "makeshop-frontend"
     Description: "Nombre de la app de Amplify"
+
   FrontendAmplifyAccessToken:
     Type: String
     Default: ""
     NoEcho: true
-    Description: "Token de GitHub (opcional para repos publicos, recomendado para privados)"
+    Description: "Token de GitHub para Amplify"
+
   DockerImageNamespace:
     Type: String
     Default: "lazheart"
-    Description: "Namespace/usuario de Docker Hub desde donde se descargan las imagenes"
+    Description: "Namespace/usuario de Docker Hub"
+
   DockerImageTag:
     Type: String
     Default: "latest"
-    Description: "Tag de las imagenes Docker del backend"
+    Description: "Tag de las imágenes Docker del backend"
 
 Conditions:
   HasFrontendAmplifyAccessToken: !Not [!Equals [!Ref FrontendAmplifyAccessToken, ""]]
 
 Resources:
-  LoadBalancerSecurityGroup:
-    Type: "AWS::EC2::SecurityGroup"
+  # ---------------------------------------------------------------------------
+  # Red y Security Groups
+  # ---------------------------------------------------------------------------
+
+  VpcLinkSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
     Properties:
-      GroupDescription: "ALB: permitir HTTP y puertos convencionales desde internet"
+      GroupDescription: "API Gateway VPC Link hacia ALB interno"
+      VpcId: !Ref VpcId
+
+  # Se conserva GroupDescription para actualizar el SG existente sin reemplazarlo.
+  LoadBalancerSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: "ALB interno: tráfico desde API Gateway VPC Link"
       VpcId: !Ref VpcId
       SecurityGroupIngress:
         - IpProtocol: "tcp"
           FromPort: 80
           ToPort: 80
-          CidrIp: "0.0.0.0/0"
+          SourceSecurityGroupId: !Ref VpcLinkSecurityGroup
         - IpProtocol: "tcp"
           FromPort: 8080
           ToPort: 8080
-          CidrIp: "0.0.0.0/0"
+          SourceSecurityGroupId: !Ref VpcLinkSecurityGroup
         - IpProtocol: "tcp"
           FromPort: 3000
           ToPort: 3000
-          CidrIp: "0.0.0.0/0"
+          SourceSecurityGroupId: !Ref VpcLinkSecurityGroup
         - IpProtocol: "tcp"
           FromPort: 8000
           ToPort: 8000
-          CidrIp: "0.0.0.0/0"
+          SourceSecurityGroupId: !Ref VpcLinkSecurityGroup
         - IpProtocol: "tcp"
           FromPort: 8004
           ToPort: 8004
-          CidrIp: "0.0.0.0/0"
+          SourceSecurityGroupId: !Ref VpcLinkSecurityGroup
         - IpProtocol: "tcp"
           FromPort: 8005
           ToPort: 8005
-          CidrIp: "0.0.0.0/0"
+          SourceSecurityGroupId: !Ref VpcLinkSecurityGroup
 
+  # Se conserva GroupDescription para actualizar el SG existente sin reemplazarlo.
   AppServerSecurityGroup:
-    Type: "AWS::EC2::SecurityGroup"
+    Type: AWS::EC2::SecurityGroup
     Properties:
       GroupDescription: "App Servers: HTTP de servicios convencionales solo desde ALB, SSH opcional"
       VpcId: !Ref VpcId
@@ -129,18 +157,27 @@ Resources:
           ToPort: 8005
           SourceSecurityGroupId: !Ref LoadBalancerSecurityGroup
         - IpProtocol: "tcp"
-          FromPort: 8004
-          ToPort: 8004
+          FromPort: 22
+          ToPort: 22
           CidrIp: "0.0.0.0/0"
+
+  # La MV de ingesta debe usarlo para acceder a las bases de datos.
+  IngestServerSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: "Ingest Server: acceso a DB desde la MV de ingesta"
+      VpcId: !Ref VpcId
+      SecurityGroupIngress:
         - IpProtocol: "tcp"
           FromPort: 22
           ToPort: 22
           CidrIp: "0.0.0.0/0"
 
+  # La descripción histórica se conserva; las reglas efectivas de DB son privadas.
   DbServerSecurityGroup:
-    Type: "AWS::EC2::SecurityGroup"
+    Type: AWS::EC2::SecurityGroup
     Properties:
-      GroupDescription: "DB Server: PostgreSQL/MySQL/Mongo accesibles publicamente (segun requerimiento)"
+      GroupDescription: "DB Server: PostgreSQL/MySQL/Mongo solo desde App e Ingest SG"
       VpcId: !Ref VpcId
       SecurityGroupIngress:
         - IpProtocol: "tcp"
@@ -150,21 +187,37 @@ Resources:
         - IpProtocol: "tcp"
           FromPort: 5432
           ToPort: 5432
-          CidrIp: "0.0.0.0/0"
+          SourceSecurityGroupId: !Ref AppServerSecurityGroup
+        - IpProtocol: "tcp"
+          FromPort: 5432
+          ToPort: 5432
+          SourceSecurityGroupId: !Ref IngestServerSecurityGroup
         - IpProtocol: "tcp"
           FromPort: 27017
           ToPort: 27017
-          CidrIp: "0.0.0.0/0"
+          SourceSecurityGroupId: !Ref AppServerSecurityGroup
+        - IpProtocol: "tcp"
+          FromPort: 27017
+          ToPort: 27017
+          SourceSecurityGroupId: !Ref IngestServerSecurityGroup
         - IpProtocol: "tcp"
           FromPort: 3307
           ToPort: 3307
-          CidrIp: "0.0.0.0/0"
+          SourceSecurityGroupId: !Ref AppServerSecurityGroup
+        - IpProtocol: "tcp"
+          FromPort: 3307
+          ToPort: 3307
+          SourceSecurityGroupId: !Ref IngestServerSecurityGroup
+
+  # ---------------------------------------------------------------------------
+  # Entrada pública: API Gateway HTTPS -> VPC Link -> ALB interno
+  # ---------------------------------------------------------------------------
 
   ApplicationLoadBalancer:
-    Type: "AWS::ElasticLoadBalancingV2::LoadBalancer"
+    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
     Properties:
-      Name: !Sub "openstore-alb-${AWS::StackName}"
-      Scheme: "internet-facing"
+      Name: !Sub "os-int-${AWS::StackName}"
+      Scheme: "internal"
       Type: "application"
       IpAddressType: "ipv4"
       SecurityGroups:
@@ -174,7 +227,7 @@ Resources:
         - !Ref PublicSubnet2
 
   HttpApi:
-    Type: "AWS::ApiGatewayV2::Api"
+    Type: AWS::ApiGatewayV2::Api
     Properties:
       Name: !Sub "openstore-http-api-${AWS::StackName}"
       ProtocolType: "HTTP"
@@ -191,50 +244,67 @@ Resources:
         AllowHeaders:
           - "*"
 
+  HttpApiVpcLink:
+    Type: AWS::ApiGatewayV2::VpcLink
+    Properties:
+      Name: !Sub "openstore-vpc-link-${AWS::StackName}"
+      SecurityGroupIds:
+        - !Ref VpcLinkSecurityGroup
+      SubnetIds:
+        - !Ref PublicSubnet1
+        - !Ref PublicSubnet2
+
   HttpApiIntegration:
-    Type: "AWS::ApiGatewayV2::Integration"
+    Type: AWS::ApiGatewayV2::Integration
     Properties:
       ApiId: !Ref HttpApi
       IntegrationType: "HTTP_PROXY"
       IntegrationMethod: "ANY"
-      IntegrationUri: !Sub "http://${ApplicationLoadBalancer.DNSName}"
+      IntegrationUri: !Ref HttpListener
+      ConnectionType: "VPC_LINK"
+      ConnectionId: !Ref HttpApiVpcLink
       PayloadFormatVersion: "1.0"
 
   HttpApiProxyIntegration:
-    Type: "AWS::ApiGatewayV2::Integration"
+    Type: AWS::ApiGatewayV2::Integration
     Properties:
       ApiId: !Ref HttpApi
       IntegrationType: "HTTP_PROXY"
       IntegrationMethod: "ANY"
-      IntegrationUri: !Sub "http://${ApplicationLoadBalancer.DNSName}/{proxy}"
+      IntegrationUri: !Ref HttpListener
+      ConnectionType: "VPC_LINK"
+      ConnectionId: !Ref HttpApiVpcLink
       PayloadFormatVersion: "1.0"
 
   HttpApiRootRoute:
-    Type: "AWS::ApiGatewayV2::Route"
+    Type: AWS::ApiGatewayV2::Route
     Properties:
       ApiId: !Ref HttpApi
       RouteKey: "ANY /"
       Target: !Sub "integrations/${HttpApiIntegration}"
 
   HttpApiProxyRoute:
-    Type: "AWS::ApiGatewayV2::Route"
+    Type: AWS::ApiGatewayV2::Route
     Properties:
       ApiId: !Ref HttpApi
       RouteKey: "ANY /{proxy+}"
       Target: !Sub "integrations/${HttpApiProxyIntegration}"
 
   HttpApiStage:
-    Type: "AWS::ApiGatewayV2::Stage"
+    Type: AWS::ApiGatewayV2::Stage
     Properties:
       ApiId: !Ref HttpApi
       StageName: "$default"
       AutoDeploy: true
 
+  # ---------------------------------------------------------------------------
+  # Target groups y listeners. Se mantienen los puertos/servicios del main.
+  # ---------------------------------------------------------------------------
 
-  StoreTargetGroup:
-    Type: "AWS::ElasticLoadBalancingV2::TargetGroup"
+  PrivateStoreTargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
     Properties:
-      Name: "os-store-tg"
+      Name: "os-int-store-tg"
       VpcId: !Ref VpcId
       Protocol: "HTTP"
       Port: 8004
@@ -245,35 +315,35 @@ Resources:
       Matcher:
         HttpCode: "200-399"
       Targets:
-        - Id: !Ref AppServer1
+        - Id: !Ref AppServer1Private
           Port: 8004
-        - Id: !Ref AppServer2
+        - Id: !Ref AppServer2Private
           Port: 8004
 
   HttpListener:
-    Type: "AWS::ElasticLoadBalancingV2::Listener"
+    Type: AWS::ElasticLoadBalancingV2::Listener
     Properties:
       LoadBalancerArn: !Ref ApplicationLoadBalancer
       Port: 80
       Protocol: "HTTP"
       DefaultActions:
         - Type: "forward"
-          TargetGroupArn: !Ref StoreTargetGroup
+          TargetGroupArn: !Ref PrivateStoreTargetGroup
 
   StoreListener:
-    Type: "AWS::ElasticLoadBalancingV2::Listener"
+    Type: AWS::ElasticLoadBalancingV2::Listener
     Properties:
       LoadBalancerArn: !Ref ApplicationLoadBalancer
       Port: 8004
       Protocol: "HTTP"
       DefaultActions:
         - Type: "forward"
-          TargetGroupArn: !Ref StoreTargetGroup
+          TargetGroupArn: !Ref PrivateStoreTargetGroup
 
-  UserTargetGroup:
-    Type: "AWS::ElasticLoadBalancingV2::TargetGroup"
+  PrivateUserTargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
     Properties:
-      Name: "os-user-tg"
+      Name: "os-int-user-tg"
       VpcId: !Ref VpcId
       Protocol: "HTTP"
       Port: 8080
@@ -284,15 +354,15 @@ Resources:
       Matcher:
         HttpCode: "200-399"
       Targets:
-        - Id: !Ref AppServer1
+        - Id: !Ref AppServer1Private
           Port: 8080
-        - Id: !Ref AppServer2
+        - Id: !Ref AppServer2Private
           Port: 8080
 
-  ShopTargetGroup:
-    Type: "AWS::ElasticLoadBalancingV2::TargetGroup"
+  PrivateShopTargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
     Properties:
-      Name: "os-shop-tg"
+      Name: "os-int-shop-tg"
       VpcId: !Ref VpcId
       Protocol: "HTTP"
       Port: 3000
@@ -303,15 +373,15 @@ Resources:
       Matcher:
         HttpCode: "200-399"
       Targets:
-        - Id: !Ref AppServer1
+        - Id: !Ref AppServer1Private
           Port: 3000
-        - Id: !Ref AppServer2
+        - Id: !Ref AppServer2Private
           Port: 3000
 
-  ProductTargetGroup:
-    Type: "AWS::ElasticLoadBalancingV2::TargetGroup"
+  PrivateProductTargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
     Properties:
-      Name: "os-product-tg"
+      Name: "os-int-prod-tg"
       VpcId: !Ref VpcId
       Protocol: "HTTP"
       Port: 8000
@@ -322,15 +392,15 @@ Resources:
       Matcher:
         HttpCode: "200-399"
       Targets:
-        - Id: !Ref AppServer1
+        - Id: !Ref AppServer1Private
           Port: 8000
-        - Id: !Ref AppServer2
+        - Id: !Ref AppServer2Private
           Port: 8000
 
-  DataAnalystTargetGroup:
-    Type: "AWS::ElasticLoadBalancingV2::TargetGroup"
+  PrivateDataAnalystTargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
     Properties:
-      Name: "os-data-tg"
+      Name: "os-int-data-tg"
       VpcId: !Ref VpcId
       Protocol: "HTTP"
       Port: 8005
@@ -341,57 +411,60 @@ Resources:
       Matcher:
         HttpCode: "200-399"
       Targets:
-        - Id: !Ref AppServer1
+        - Id: !Ref AppServer1Private
           Port: 8005
-        - Id: !Ref AppServer2
+        - Id: !Ref AppServer2Private
           Port: 8005
 
   UserListener:
-    Type: "AWS::ElasticLoadBalancingV2::Listener"
+    Type: AWS::ElasticLoadBalancingV2::Listener
     Properties:
       LoadBalancerArn: !Ref ApplicationLoadBalancer
       Port: 8080
       Protocol: "HTTP"
       DefaultActions:
         - Type: "forward"
-          TargetGroupArn: !Ref UserTargetGroup
+          TargetGroupArn: !Ref PrivateUserTargetGroup
 
   ShopListener:
-    Type: "AWS::ElasticLoadBalancingV2::Listener"
+    Type: AWS::ElasticLoadBalancingV2::Listener
     Properties:
       LoadBalancerArn: !Ref ApplicationLoadBalancer
       Port: 3000
       Protocol: "HTTP"
       DefaultActions:
         - Type: "forward"
-          TargetGroupArn: !Ref ShopTargetGroup
+          TargetGroupArn: !Ref PrivateShopTargetGroup
 
   ProductListener:
-    Type: "AWS::ElasticLoadBalancingV2::Listener"
+    Type: AWS::ElasticLoadBalancingV2::Listener
     Properties:
       LoadBalancerArn: !Ref ApplicationLoadBalancer
       Port: 8000
       Protocol: "HTTP"
       DefaultActions:
         - Type: "forward"
-          TargetGroupArn: !Ref ProductTargetGroup
+          TargetGroupArn: !Ref PrivateProductTargetGroup
 
   DataAnalystListener:
-    Type: "AWS::ElasticLoadBalancingV2::Listener"
+    Type: AWS::ElasticLoadBalancingV2::Listener
     Properties:
       LoadBalancerArn: !Ref ApplicationLoadBalancer
       Port: 8005
       Protocol: "HTTP"
       DefaultActions:
         - Type: "forward"
-          TargetGroupArn: !Ref DataAnalystTargetGroup
+          TargetGroupArn: !Ref PrivateDataAnalystTargetGroup
 
+  # ---------------------------------------------------------------------------
+  # App Servers. Estos IDs fuerzan una recreación única al migrar desde el template legado.
+  # ---------------------------------------------------------------------------
 
-  AppServer1:
-    Type: "AWS::EC2::Instance"
+  AppServer1Private:
+    Type: AWS::EC2::Instance
     DependsOn:
       - DbServer
-      - DbServerElasticIPAssociation
+      - DbServerSecurityGroup
     Properties:
       Tags:
         - Key: "Name"
@@ -421,14 +494,14 @@ Resources:
           git clone "${FrontendRepoUrl}" MakeShop
           chown -R ubuntu:ubuntu MakeShop
           cd MakeShop/backend
-          cat > .env <<EOF
+          cat > .env <<EOF_ENV
           DOCKER_IMAGE_NAMESPACE=${DockerImageNamespace}
           DOCKER_IMAGE_TAG=${DockerImageTag}
-          DB_HOST=${DbServerElasticAddress}
+          DB_HOST=${DbServer.PrivateIp}
           POSTGRES_DB=userdb
           POSTGRES_USER=admin
           POSTGRES_PASSWORD=admin123
-          DATABASE_URL=jdbc:postgresql://${DbServerElasticAddress}:5432/userdb
+          DATABASE_URL=jdbc:postgresql://${DbServer.PrivateIp}:5432/userdb
           DB_USERNAME=admin
           DB_PASSWORD=admin123
           DB_NAME=userdb
@@ -451,7 +524,21 @@ Resources:
           ATHENA_RESULTS_BUCKET=s3://openstore-ingest-${AWS::AccountId}/athena-results/
           ATHENA_WORKGROUP=openstore-workgroup
           DATA_ANALYST_SERVICE_URL=http://data-analyst-service:8005
-          EOF
+          EOF_ENV
+          for port in 5432 3307 27017; do
+            ready=0
+            for attempt in $(seq 1 60); do
+              if timeout 1 bash -c "</dev/tcp/${DbServer.PrivateIp}/$port" 2>/dev/null; then
+                ready=1
+                break
+              fi
+              sleep 2
+            done
+            if [ "$ready" -ne 1 ]; then
+              echo "Database port $port is not ready"
+              exit 1
+            fi
+          done
           docker compose pull
           docker compose up -d
           cd ..
@@ -459,11 +546,11 @@ Resources:
           sudo rm -rf database
           cd ..
 
-  AppServer2:
-    Type: "AWS::EC2::Instance"
+  AppServer2Private:
+    Type: AWS::EC2::Instance
     DependsOn:
       - DbServer
-      - DbServerElasticIPAssociation
+      - DbServerSecurityGroup
     Properties:
       Tags:
         - Key: "Name"
@@ -493,14 +580,14 @@ Resources:
           git clone "${FrontendRepoUrl}" MakeShop
           chown -R ubuntu:ubuntu MakeShop
           cd MakeShop/backend
-          cat > .env <<EOF
+          cat > .env <<EOF_ENV
           DOCKER_IMAGE_NAMESPACE=${DockerImageNamespace}
           DOCKER_IMAGE_TAG=${DockerImageTag}
-          DB_HOST=${DbServerElasticAddress}
+          DB_HOST=${DbServer.PrivateIp}
           POSTGRES_DB=userdb
           POSTGRES_USER=admin
           POSTGRES_PASSWORD=admin123
-          DATABASE_URL=jdbc:postgresql://${DbServerElasticAddress}:5432/userdb
+          DATABASE_URL=jdbc:postgresql://${DbServer.PrivateIp}:5432/userdb
           DB_USERNAME=admin
           DB_PASSWORD=admin123
           DB_NAME=userdb
@@ -523,7 +610,21 @@ Resources:
           ATHENA_RESULTS_BUCKET=s3://openstore-ingest-${AWS::AccountId}/athena-results/
           ATHENA_WORKGROUP=openstore-workgroup
           DATA_ANALYST_SERVICE_URL=http://data-analyst-service:8005
-          EOF
+          EOF_ENV
+          for port in 5432 3307 27017; do
+            ready=0
+            for attempt in $(seq 1 60); do
+              if timeout 1 bash -c "</dev/tcp/${DbServer.PrivateIp}/$port" 2>/dev/null; then
+                ready=1
+                break
+              fi
+              sleep 2
+            done
+            if [ "$ready" -ne 1 ]; then
+              echo "Database port $port is not ready"
+              exit 1
+            fi
+          done
           docker compose pull
           docker compose up -d
           cd ..
@@ -531,9 +632,12 @@ Resources:
           sudo rm -rf database
           cd ..
 
+  # ---------------------------------------------------------------------------
+  # DB Server. Se conserva el host actual y se privatizan los puertos de base de datos con SG.
+  # ---------------------------------------------------------------------------
 
   DbServer:
-    Type: "AWS::EC2::Instance"
+    Type: AWS::EC2::Instance
     Properties:
       Tags:
         - Key: "Name"
@@ -581,26 +685,27 @@ Resources:
           docker compose up -d
           cd ..
 
+  # Se conserva la EIP existente del host para administración. Los puertos DB no aceptan tráfico público.
   DbServerElasticAddress:
-    Type: "AWS::EC2::EIP"
+    Type: AWS::EC2::EIP
     DependsOn: DbServer
     DeletionPolicy: Retain
     UpdateReplacePolicy: Retain
     Properties:
-      Domain: "vpc"
+      Domain: vpc
       Tags:
         - Key: "Name"
           Value: !Sub "${InstanceName}-DB-EIP"
 
   DbServerElasticIPAssociation:
-    Type: "AWS::EC2::EIPAssociation"
+    Type: AWS::EC2::EIPAssociation
     DependsOn: DbServer
     Properties:
       AllocationId: !GetAtt DbServerElasticAddress.AllocationId
       InstanceId: !Ref DbServer
 
   ImagesBucket:
-    Type: "AWS::S3::Bucket"
+    Type: AWS::S3::Bucket
     Properties:
       BucketName: !Sub "makeshop-products-${AWS::AccountId}"
       PublicAccessBlockConfiguration:
@@ -610,7 +715,7 @@ Resources:
         RestrictPublicBuckets: true
 
   ProfilePictureBucket:
-    Type: "AWS::S3::Bucket"
+    Type: AWS::S3::Bucket
     Properties:
       BucketName: !Sub "makeshop-profile-pictures-${AWS::AccountId}"
       PublicAccessBlockConfiguration:
@@ -624,7 +729,7 @@ Resources:
     Properties:
       Name: !Ref FrontendAmplifyAppName
       Repository: !Ref FrontendRepoUrl
-      AccessToken: !If [HasFrontendAmplifyAccessToken, !Ref FrontendAmplifyAccessToken, !Ref AWS::NoValue]
+      AccessToken: !If [HasFrontendAmplifyAccessToken, !Ref FrontendAmplifyAccessToken, !Ref "AWS::NoValue"]
       BuildSpec: |
         version: 1
         applications:
@@ -658,7 +763,7 @@ Resources:
           Status: "404-200"
 
   FrontendAmplifyBranch:
-    Type: "AWS::Amplify::Branch"
+    Type: AWS::Amplify::Branch
     DependsOn: ApplicationLoadBalancer
     Properties:
       AppId: !GetAtt FrontendAmplifyApp.AppId
@@ -675,35 +780,49 @@ Resources:
 
 Outputs:
   LoadBalancerDNS:
-    Description: "DNS del Application Load Balancer"
+    Description: "DNS interno del Application Load Balancer"
     Value: !GetAtt ApplicationLoadBalancer.DNSName
+
   AppServer1PublicIP:
-    Description: "IP publica del App Server 1"
-    Value: !GetAtt AppServer1.PublicIp
+    Description: "IP pública del App Server 1 para administración"
+    Value: !GetAtt AppServer1Private.PublicIp
+
   AppServer2PublicIP:
-    Description: "IP publica del App Server 2"
-    Value: !GetAtt AppServer2.PublicIp
-  DbServerPublicIP:
-    Description: "Elastic IP publica y estable del DB Server"
-    Value: !Ref DbServerElasticAddress
-  DbServerElasticIP:
-    Description: "Elastic IP publica y estable usada por los microservicios y la ingesta"
-    Value: !Ref DbServerElasticAddress
+    Description: "IP pública del App Server 2 para administración"
+    Value: !GetAtt AppServer2Private.PublicIp
+
   DbServerPrivateIP:
-    Description: "IP privada del DB Server para backend e ingesta"
+    Description: "IP privada para conexiones de backend e ingesta a las bases de datos"
     Value: !GetAtt DbServer.PrivateIp
+
+  DbServerPublicIP:
+    Description: "Elastic IP administrativa del host DB"
+    Value: !Ref DbServerElasticAddress
+
+  DbServerElasticIP:
+    Description: "Elastic IP administrativa del host DB; no usar para conexiones de base de datos"
+    Value: !Ref DbServerElasticAddress
+
+  IngestServerSecurityGroupId:
+    Description: "Security Group que debe usar la MV de ingesta para acceder a PostgreSQL/MySQL/Mongo"
+    Value: !Ref IngestServerSecurityGroup
+
   ImagesBucketName:
     Description: "Nombre del bucket S3"
     Value: !Ref ImagesBucket
+
   FrontendAmplifyAppId:
     Description: "AppId de Amplify para frontend"
     Value: !GetAtt FrontendAmplifyApp.AppId
+
   FrontendAmplifyDefaultDomain:
     Description: "Dominio base de Amplify"
     Value: !GetAtt FrontendAmplifyApp.DefaultDomain
+
   FrontendAmplifyURL:
-    Description: "URL publica del frontend en Amplify"
+    Description: "URL pública del frontend en Amplify"
     Value: !Sub "https://${FrontendBranchName}.${FrontendAmplifyApp.DefaultDomain}"
+
   HttpApiEndpoint:
-    Description: "Endpoint HTTPS del API Gateway"
+    Description: "Endpoint público HTTPS del backend mediante API Gateway"
     Value: !Sub "https://${HttpApi}.execute-api.${AWS::Region}.amazonaws.com"

@@ -735,11 +735,11 @@ async def docs_mappings(request: Request) -> HTMLResponse:
 			"url": f"{store_public_url}/docs",
 			"note": "Swagger del gateway; el contrato que debe usar el frontend.",
 		},
-		{"name": "Shop Service", "url": f"{SHOP_SERVICE_URL}/api-docs", "note": "API interna de tiendas"},
+		{"name": "Shop Service", "url": f"{SHOP_SERVICE_URL}/docs", "note": "Swagger interno de tiendas"},
 		{"name": "Product Service", "url": f"{PRODUCT_SERVICE_URL}/docs", "note": "API interna de productos"},
 		{
 			"name": "User Service",
-			"url": f"{USER_SERVICE_URL}/swagger-ui/index.html",
+			"url": f"{USER_SERVICE_URL}/docs",
 			"note": "Usuarios y auth (Spring)",
 		},
 		{

@@ -52,14 +52,14 @@
         <header class="page-header">
           <p class="page-kicker">API & Gateway</p>
           <h1>Gateway, microservicios y contratos HTTP</h1>
-          <p class="page-lead">Todas las peticiones del frontend pasan por <code>store-service</code>. Ese servicio enruta a <code>user-service</code>, <code>shop-service</code> y <code>product-service</code>, valida ownership y desacopla al cliente de la topología interna.</p>
+          <p class="page-lead">El frontend usa una única URL de API Gateway. El tráfico llega a <code>store-service</code>, que enruta a <code>user-service</code>, <code>shop-service</code>, <code>product-service</code> y <code>data-analyst-service</code>.</p>
         </header>
 
         <section class="doc-section">
           <h2 class="section-title">store-service orquesta toda la capa de API</h2>
           <div class="hero-banner">
-            <h2>Una sola URL pública, cuatro servicios internos</h2>
-            <p>El frontend no habla con los microservicios de forma directa. <code>store-service</code> actúa como fachada pública: recibe las solicitudes, redirige al servicio correcto y coordina cadenas de llamadas cuando una operación toca varias entidades.</p>
+            <h2>Una sola URL pública, cinco microservicios</h2>
+            <p>API Gateway es la entrada pública HTTPS. <code>store-service</code> actúa como fachada de aplicación: recibe las solicitudes, redirige al servicio correcto y coordina cadenas de llamadas cuando una operación toca varias entidades.</p>
           </div>
         </section>
 
@@ -73,7 +73,7 @@
               <tbody>
                 <tr>
                   <td><code>store-service</code></td><td>8004</td><td>No persiste</td>
-                  <td><code>USER_SERVICE_URL</code>, <code>SHOP_SERVICE_URL</code>, <code>PRODUCT_SERVICE_URL</code>, <code>AWS_REGION</code>, <code>ATHENA_DATABASE</code>, <code>ATHENA_RESULTS_BUCKET</code></td>
+                  <td><code>USER_SERVICE_URL</code>, <code>SHOP_SERVICE_URL</code>, <code>PRODUCT_SERVICE_URL</code>, <code>DATA_ANALYST_SERVICE_URL</code></td>
                 </tr>
                 <tr>
                   <td><code>user-service</code></td><td>8080</td><td>PostgreSQL</td>
@@ -87,6 +87,10 @@
                   <td><code>product-service</code></td><td>8000</td><td>MongoDB</td>
                   <td><code>MONGO_URI</code>, <code>AWS_REGION</code>, <code>BUCKET_NAME</code>, <code>STORE_SERVICE_URL</code></td>
                 </tr>
+                <tr>
+                  <td><code>data-analyst-service</code></td><td>8005</td><td>No persiste</td>
+                  <td><code>ATHENA_DATABASE</code>, <code>ATHENA_RESULTS_BUCKET</code>, <code>ATHENA_WORKGROUP</code>, <code>USER_SERVICE_URL</code></td>
+                </tr>
               </tbody>
             </table>
           </div>
@@ -97,7 +101,7 @@
           <div class="card-grid two-up">
             <article class="feature-card">
               <h3>store-service</h3>
-              <p>Gateway público. Resuelve login, registro, crea/elimina tiendas, proxea el catálogo y expone endpoints de analytics consultando Athena.</p>
+              <p>Fachada de aplicación. Resuelve y proxea operaciones de usuarios, tiendas y productos, y delega las rutas analíticas a <code>data-analyst-service</code>.</p>
             </article>
             <article class="feature-card">
               <h3>user-service</h3>
@@ -111,6 +115,10 @@
               <h3>product-service</h3>
               <p>Maneja el catálogo de productos, las imágenes subidas a S3 y las operaciones CRUD ligadas a una tienda específica.</p>
             </article>
+            <article class="feature-card">
+              <h3>data-analyst-service</h3>
+              <p>Microservicio sin base propia. Ejecuta consultas sobre Athena y devuelve métricas del catálogo analítico para el owner autenticado.</p>
+            </article>
           </div>
         </section>
 
@@ -118,13 +126,13 @@
           <h2 class="section-title">Endpoints por servicio</h2>
           <div class="card-grid">
             <article class="feature-card">
-              <h3>store-service (gateway público)</h3>
+              <h3>store-service (orquestador)</h3>
               <ul>
                 <li><strong>Auth:</strong> <code>POST /auth/login</code>, <code>POST /auth/register</code>, <code>GET /me</code>, <code>PATCH /me</code>, <code>POST /verify</code></li>
                 <li><strong>Suscripción:</strong> <code>PATCH /user/me/subscription</code>, <code>PATCH /user/{user_id}/subscription</code></li>
                 <li><strong>Tiendas:</strong> <code>POST /openshop/shop</code>, <code>GET /shops</code>, <code>GET /shops/{id}</code>, <code>PATCH /shop/id/{id}</code>, <code>DELETE /shop/id/{id}</code>, <code>GET|PUT /shop/{id}/theme</code></li>
                 <li><strong>Productos:</strong> <code>GET|POST /shops/{id}/products</code>, <code>PATCH|DELETE /shops/{id}/products/{pid}</code></li>
-                <li><strong>Analytics:</strong> <code>GET /analytics/productos-por-tienda</code>, <code>/analytics/usuarios-por-tienda</code>, <code>/analytics/membresias-por-tienda</code>, <code>/analytics/resumen-tiendas</code></li>
+                <li><strong>Analytics:</strong> <code>GET /analytics/owner/summary</code>, <code>/analytics/owner/shops</code>, <code>/analytics/owner/trend</code>, <code>/analytics/owner/products</code>, <code>/analytics/owner/catalog-health</code></li>
               </ul>
             </article>
             <article class="feature-card">
@@ -157,6 +165,17 @@
                 <li><code>DELETE /shops/{shop_id}/products/{product_id}</code></li>
               </ul>
             </article>
+            <article class="feature-card">
+              <h3>data-analyst-service (interno)</h3>
+              <ul>
+                <li><code>GET /health</code></li>
+                <li><code>GET /analytics/owner/summary</code></li>
+                <li><code>GET /analytics/owner/shops</code></li>
+                <li><code>GET /analytics/owner/trend</code></li>
+                <li><code>GET /analytics/owner/products</code></li>
+                <li><code>GET /analytics/owner/catalog-health</code></li>
+              </ul>
+            </article>
           </div>
         </section>
 
@@ -170,6 +189,7 @@
                 <tr><td>shop-service</td><td>MySQL</td><td>Tiendas, membresías y configuración del storefront.</td></tr>
                 <tr><td>product-service</td><td>MongoDB</td><td>Catálogo flexible; los documentos de producto varían por tienda.</td></tr>
                 <tr><td>store-service</td><td>No aplica</td><td>Solo orquesta; delega persistencia a los servicios internos.</td></tr>
+                <tr><td>data-analyst-service</td><td>No aplica</td><td>Consulta Glue/Athena sobre los archivos de ingesta almacenados en S3.</td></tr>
               </tbody>
             </table>
           </div>

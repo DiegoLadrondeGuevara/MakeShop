@@ -3,11 +3,11 @@
 Esta ruta usa:
 
 - EC2 + Docker Compose para `backend/` y `database/`.
-- Application Load Balancer + API Gateway HTTP para exponer `store-service`.
+- API Gateway HTTPS + VPC Link + Application Load Balancer interno para exponer `store-service`.
 - Target groups/listeners independientes para `8080` (user), `3000` (shop), `8000` (product), `8004` (store) y `8005` (data analyst).
 - AWS Amplify para `frontend/`.
 - S3 para imagenes de productos.
-- Glue/Athena opcional para analytics e ingesta.
+- S3, Glue y Athena para la parte de ingesta y analítica.
 
 ## 1. Datos que debes tener listos
 
@@ -126,11 +126,11 @@ El output `FrontendAmplifyURL` es la URL publica. Si Amplify aun esta compilando
 
 La variable `VITE_LOAD_BALANCER_API` se configura automaticamente con el `HttpApiEndpoint`.
 
-El frontend usa el gateway en `8004`; el servicio analitico se consume mediante las rutas `/analytics/owner/*`, mientras que `8005` queda disponible en el ALB como listener/target group dedicado para operacion y health checks.
+El frontend consume la URL HTTPS de API Gateway. `store-service` atiende el tráfico público de aplicación y delega las rutas `/analytics/owner/*` a `data-analyst-service`.
 
-## 6. Glue/Athena opcional
+## 6. Data Science: S3, Glue y Athena
 
-Despues del stack principal puedes crear analytics:
+Para completar la parte de Data Science, despliega el stack de S3, Glue y Athena:
 
 ```bash
 aws cloudformation deploy \
@@ -140,9 +140,11 @@ aws cloudformation deploy \
   --capabilities CAPABILITY_NAMED_IAM
 ```
 
+Antes de ejecutar la ingesta, asocia a la MV de ingesta el Security Group indicado por el output `IngestServerSecurityGroupId`.
+
 Luego actualiza `dataingest/.env` con:
 
-- `POSTGRES_HOST`, `MYSQL_HOST` y `MONGO_URI` usando `DbServerElasticIP`
+- `POSTGRES_HOST`, `MYSQL_HOST` y el host de `MONGO_URI` usando `DbServerPrivateIP`
 - `S3_BUCKET=openstore-ingest-TU_ACCOUNT_ID`
 - credenciales temporales de AWS Academy
 
