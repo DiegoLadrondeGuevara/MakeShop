@@ -1,6 +1,7 @@
 import json
 import os
 import sys
+from datetime import date, datetime
 import boto3
 import pymongo
 
@@ -31,7 +32,13 @@ def write_json(records: list, filepath: str) -> None:
     # JSON Lines format (one object per line) — required by Athena
     with open(filepath, "w", encoding="utf-8") as f:
         for record in records:
-            f.write(json.dumps(record, ensure_ascii=False) + "\n")
+            f.write(json.dumps(record, ensure_ascii=False, default=_json_default) + "\n")
+
+
+def _json_default(value):
+    if isinstance(value, (datetime, date)):
+        return value.isoformat()
+    return str(value)
 
 
 def upload_to_s3(filepath: str, bucket: str, key: str) -> None:
