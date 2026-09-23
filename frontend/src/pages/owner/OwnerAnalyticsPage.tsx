@@ -24,7 +24,7 @@ import {
   type TrendPoint,
 } from '../../api/data-analyst-service/analytics-api';
 import { getApiErrorMessage } from '../../api/api';
-import { getShops, type Shop } from '../../api/shop-service/shop-api';
+import { getOwnerShops, type Shop } from '../../api/shop-service/shop-api';
 import { getCurrentUser, getMe } from '../../api/user-service/user-service';
 
 const isoDate = (value: Date) => value.toISOString().slice(0, 10);
@@ -75,10 +75,9 @@ export default function OwnerAnalyticsPage() {
 
   const loadShops = async () => {
     try {
-      const [response, profile] = await Promise.all([getShops(1, 100), getMe()]);
-      const rows = Array.isArray(response) ? response : response?.data ?? [];
+      const profile = await getMe();
       const ownerId = profile.id ?? getCurrentUser()?.uid ?? '';
-      setShops(ownerId ? rows.filter((shop: Shop) => String(shop.owner_id ?? shop.ownerId ?? '') === String(ownerId)) : []);
+      setShops(ownerId ? await getOwnerShops(String(ownerId)) : []);
     } catch (loadError) {
       setError(getApiErrorMessage(loadError, 'No se pudieron cargar las tiendas'));
     }

@@ -55,6 +55,11 @@ export const getShops = async (page = 1, limit = 10) => {
   return response.data;
 };
 
+export const getOwnerShops = async (ownerId: string): Promise<Shop[]> => {
+  const response = await api.get<Shop[]>(`/owners/${encodeURIComponent(ownerId)}/shops`);
+  return response.data;
+};
+
 export const getShopById = async (id: string): Promise<Shop> => {
   const response = await api.get<Shop>(`/shops/${id}`);
   return response.data;

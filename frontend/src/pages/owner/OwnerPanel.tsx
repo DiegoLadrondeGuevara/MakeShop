@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState, type ReactNode } from 'react';
 import { Package, Plus, Edit2, Store, ArrowLeft, ChevronRight, Trash2, X, Palette, ExternalLink, Check, ChevronLeft } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
-import { getShops, createShop } from '../../api/shop-service/shop-api';
+import { getShops, getOwnerShops, createShop } from '../../api/shop-service/shop-api';
 import type { Shop, ThemeColors } from '../../api/shop-service/shop-api';
 import { getProductsByShop, createProduct, updateProduct, deleteProduct } from '../../api/product-service/product-api';
 import type { Product } from '../../api/product-service/product-api';
@@ -316,24 +316,18 @@ export default function OwnerPanel() {
   const loadShops = useCallback(async (): Promise<Shop[]> => {
     try {
       setLoading(true);
-      const [data, profile] = await Promise.all([
-        getShops(1, 100),
-        getMe().catch(() => null),
-      ]);
-      const allShops: Shop[] = data.data || [];
+      const profile = await getMe().catch(() => null);
       const subscription = String(profile?.subscription || '').toUpperCase();
       setBillingPlan(subscription === 'PRO' || subscription === 'MAX' ? subscription : 'FREE');
 
-      // Determine identifier to match owner on shops. Prefer server-side profile id, fall back to local auth uid.
       const ownerIdentifier = profile?.id ?? user?.uid ?? null;
       const isAdmin = (profile?.role || user?.role || '').toUpperCase() === 'ADMIN';
-
-      // If admin, show all shops. Otherwise show only shops that belong to the current user.
-      const ownerShops = ownerIdentifier
-        ? allShops.filter((s) => String(s.owner_id ?? s.ownerId ?? '') === String(ownerIdentifier))
-        : [];
-
-      const visibleShops = isAdmin ? allShops : ownerShops;
+      const data = isAdmin
+        ? await getShops(1, 100)
+        : ownerIdentifier
+          ? await getOwnerShops(String(ownerIdentifier))
+          : [];
+      const visibleShops: Shop[] = isAdmin ? (data.data || []) : data;
       setShops(visibleShops);
       return visibleShops;
     } catch (error) {

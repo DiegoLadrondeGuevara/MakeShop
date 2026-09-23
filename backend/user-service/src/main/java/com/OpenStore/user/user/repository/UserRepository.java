@@ -20,7 +20,10 @@ public interface UserRepository extends JpaRepository<User, UUID> {
     Optional<User> findByName(String name);
     Optional<User> findByNameIgnoreCase(String name);
     Page<User> findByShopId(UUID shopId, Pageable pageable);
+    Page<User> findByShopIdAndRoleNot(UUID shopId, UserRole role, Pageable pageable);
     Page<User> findByShopIdIn(Collection<UUID> shopIds, Pageable pageable);
+    Page<User> findByShopIdInAndRoleNot(Collection<UUID> shopIds, UserRole role, Pageable pageable);
     Page<User> findByRole(UserRole role, Pageable pageable);
     List<User> findByShopId(UUID shopId);
+    List<User> findByShopIdAndRoleNot(UUID shopId, UserRole role);
 }

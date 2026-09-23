@@ -224,7 +224,7 @@ public class UserService implements UserDetailsService {
     }
 
     public List<UserResponse> findAllByShopId(UUID shopId) {
-        return userRepository.findByShopId(shopId).stream()
+        return userRepository.findByShopIdAndRoleNot(shopId, UserRole.OWNER).stream()
                 .map(this::toResponse)
                 .toList();
     }
@@ -232,7 +232,7 @@ public class UserService implements UserDetailsService {
     public Page<UserResponse> findByShopId(UUID shopId, int page, int size) {
         int safePage = Math.max(page, 0);
         int safeSize = Math.min(Math.max(size, 1), 100);
-        return userRepository.findByShopId(shopId, PageRequest.of(safePage, safeSize))
+        return userRepository.findByShopIdAndRoleNot(shopId, UserRole.OWNER, PageRequest.of(safePage, safeSize))
                 .map(this::toResponse);
     }
 
@@ -245,7 +245,7 @@ public class UserService implements UserDetailsService {
             return buildPagedUsersResponse(Page.empty(pageRequest));
         }
 
-        Page<UserResponse> users = userRepository.findByShopIdIn(shopIds, pageRequest)
+        Page<UserResponse> users = userRepository.findByShopIdInAndRoleNot(shopIds, UserRole.OWNER, pageRequest)
                 .map(this::toResponse);
         return buildPagedUsersResponse(users);
     }

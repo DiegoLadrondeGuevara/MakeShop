@@ -130,10 +130,9 @@ export default function AdminPanel() {
         shopName: String(client.shopName ?? client.storeName ?? client.shop?.name ?? store.name ?? ''),
       }));
       setSelectedClientsList(normalized);
-    } catch {
-      setSelectedClientsList([
-        { id: '1', username: 'demo1', email: 'demo1@example.com', phone: '+1-555-0001' },
-      ]);
+    } catch (error) {
+      console.error('Failed to fetch clients for store:', error);
+      setSelectedClientsList([]);
     }
     setSelectedClient(null);
     setModalOpen(true);
