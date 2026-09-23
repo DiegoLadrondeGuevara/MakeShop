@@ -51,6 +51,7 @@ def main() -> None:
         membership_rows = []
         now = datetime.utcnow()
         client_number = 0
+        day_offsets = (3, 10, 20, 35, 50)
 
         for shop_id, shop_name in shops:
             for index in range(CLIENTS_PER_SHOP):
@@ -60,7 +61,9 @@ def main() -> None:
                     f"makeshop-demo-client:{shop_id}:{index}",
                 ))
                 email = f"client-{shop_id}-{index}@prod.seed"
-                created_at = now - timedelta(days=(client_number - 1) % 60)
+                # Keep every shop represented in both the current and previous
+                # 30-day periods used by the owner dashboard.
+                created_at = now - timedelta(days=day_offsets[index % len(day_offsets)])
                 name = f"Cliente {index + 1} - {str(shop_name)[:70]}"
                 phone = f"9{client_number % 100000000:08d}"
                 user_rows.append(
@@ -78,7 +81,16 @@ def main() -> None:
                     (id, name, email, phone_number, role, subscription, shop_id,
                      password, enabled, email_verified, token_version, created_at, updated_at)
                 VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
-                ON CONFLICT (email) DO NOTHING
+                ON CONFLICT (email) DO UPDATE SET
+                    name = EXCLUDED.name,
+                    phone_number = EXCLUDED.phone_number,
+                    role = EXCLUDED.role,
+                    shop_id = EXCLUDED.shop_id,
+                    password = EXCLUDED.password,
+                    enabled = EXCLUDED.enabled,
+                    email_verified = EXCLUDED.email_verified,
+                    created_at = EXCLUDED.created_at,
+                    updated_at = EXCLUDED.updated_at
                 """,
                 user_rows,
             )

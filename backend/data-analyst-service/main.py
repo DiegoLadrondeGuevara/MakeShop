@@ -67,6 +67,15 @@ def _date_literal(value: date) -> str:
     return f"DATE '{value.isoformat()}'"
 
 
+def _created_date(alias: str = "u") -> str:
+    """Parse Glue CSV timestamps whether Athena inferred string or timestamp."""
+    field = f"{alias}.created_at"
+    return (
+        f"COALESCE(TRY_CAST({field} AS DATE), "
+        f"TRY_CAST(substr(CAST({field} AS VARCHAR), 1, 10) AS DATE))"
+    )
+
+
 def _athena_client():
     return boto3.client("athena", region_name=AWS_REGION)
 
@@ -125,6 +134,7 @@ def _shop_filter(shop_id: str | None, alias: str = "s") -> str:
 
 
 def _summary_query(owner_id: str, start: date, end: date, previous_start: date, previous_end: date, shop_id: str | None) -> str:
+    created_date = _created_date()
     return f"""
 WITH owner_shops AS (
     SELECT id, name FROM shops_csv s WHERE s.owner_id = {owner_id}{_shop_filter(shop_id)}
@@ -138,8 +148,8 @@ product_metrics AS (
 ),
 user_metrics AS (
     SELECT COUNT(DISTINCT u.id) AS total_users,
-           COUNT(DISTINCT CASE WHEN TRY_CAST(u.created_at AS DATE) BETWEEN {_date_literal(start)} AND {_date_literal(end)} THEN u.id END) AS registered_in_period,
-           COUNT(DISTINCT CASE WHEN TRY_CAST(u.created_at AS DATE) BETWEEN {_date_literal(previous_start)} AND {_date_literal(previous_end)} THEN u.id END) AS registered_in_previous_period
+           COUNT(DISTINCT CASE WHEN {created_date} BETWEEN {_date_literal(start)} AND {_date_literal(end)} THEN u.id END) AS registered_in_period,
+           COUNT(DISTINCT CASE WHEN {created_date} BETWEEN {_date_literal(previous_start)} AND {_date_literal(previous_end)} THEN u.id END) AS registered_in_previous_period
     FROM users u JOIN owner_shops s ON u.shop_id = s.id
     WHERE UPPER(COALESCE(u.role, '')) <> 'OWNER'
 ),
@@ -157,6 +167,7 @@ FROM product_metrics p CROSS JOIN user_metrics u CROSS JOIN membership_metrics m
 
 
 def _shops_query(owner_id: str, start: date, end: date, previous_start: date, previous_end: date, shop_id: str | None) -> str:
+    created_date = _created_date()
     return f"""
 WITH owner_shops AS (
     SELECT s.id, s.name, s.phone_number
@@ -174,8 +185,8 @@ product_metrics AS (
 user_metrics AS (
     SELECT u.shop_id,
            COUNT(DISTINCT CASE WHEN UPPER(COALESCE(u.role, '')) <> 'OWNER' THEN u.id END) AS total_users,
-           COUNT(DISTINCT CASE WHEN UPPER(COALESCE(u.role, '')) <> 'OWNER' AND TRY_CAST(u.created_at AS DATE) BETWEEN {_date_literal(start)} AND {_date_literal(end)} THEN u.id END) AS registered_in_period,
-           COUNT(DISTINCT CASE WHEN UPPER(COALESCE(u.role, '')) <> 'OWNER' AND TRY_CAST(u.created_at AS DATE) BETWEEN {_date_literal(previous_start)} AND {_date_literal(previous_end)} THEN u.id END) AS registered_in_previous_period
+           COUNT(DISTINCT CASE WHEN UPPER(COALESCE(u.role, '')) <> 'OWNER' AND {created_date} BETWEEN {_date_literal(start)} AND {_date_literal(end)} THEN u.id END) AS registered_in_period,
+           COUNT(DISTINCT CASE WHEN UPPER(COALESCE(u.role, '')) <> 'OWNER' AND {created_date} BETWEEN {_date_literal(previous_start)} AND {_date_literal(previous_end)} THEN u.id END) AS registered_in_previous_period
     FROM users u GROUP BY u.shop_id
 ),
 membership_metrics AS (
@@ -200,16 +211,17 @@ ORDER BY total_products DESC, shop_name
 
 
 def _trend_query(owner_id: str, start: date, end: date, shop_id: str | None) -> str:
+    created_date = _created_date()
     return f"""
 WITH owner_shops AS (
     SELECT id FROM shops_csv s WHERE s.owner_id = {owner_id}{_shop_filter(shop_id)}
 )
-SELECT CAST(TRY_CAST(u.created_at AS DATE) AS VARCHAR) AS period,
+SELECT CAST({created_date} AS VARCHAR) AS period,
        COUNT(DISTINCT u.id) AS registered_users
 FROM users u JOIN owner_shops s ON u.shop_id = s.id
 WHERE UPPER(COALESCE(u.role, '')) <> 'OWNER'
-  AND TRY_CAST(u.created_at AS DATE) BETWEEN {_date_literal(start)} AND {_date_literal(end)}
-GROUP BY TRY_CAST(u.created_at AS DATE)
+  AND {created_date} BETWEEN {_date_literal(start)} AND {_date_literal(end)}
+GROUP BY {created_date}
 ORDER BY period
 """
 
