@@ -127,6 +127,8 @@ export default function OwnerAnalyticsPage() {
   const lastTrendValue = trend.length ? numberValue(trend[trend.length - 1].registered_users) : 0;
   const trendDirection = lastTrendValue - firstTrendValue;
   const trendDirectionPercent = firstTrendValue === 0 ? (lastTrendValue > 0 ? 100 : 0) : (trendDirection / firstTrendValue) * 100;
+  const totalShopClients = shopRows.reduce((total, row) => total + numberValue(row.total_users), 0);
+  const maxShopClients = Math.max(...shopRows.map((row) => numberValue(row.total_users)), 1);
   const selectedShopName = filters.shopId ? getShopName(shops.find((shop) => getShopId(shop) === filters.shopId) ?? {}) : 'Todas las tiendas';
 
   const insight = useMemo(() => {
@@ -175,12 +177,11 @@ export default function OwnerAnalyticsPage() {
           {trend.length === 0 ? <div style={{ minHeight: 220, display: 'grid', placeItems: 'center', color: 'var(--text-secondary)', fontSize: '0.85rem' }}>No hay registros en este periodo.</div> : <>
             <div style={{ display: 'grid', gridTemplateColumns: 'auto 1fr', gap: '0.7rem', minHeight: 230 }}>
               <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'space-between', padding: '0.25rem 0', color: 'var(--text-secondary)', fontSize: '0.7rem', textAlign: 'right' }}><span>{maxTrend}</span><span>{Math.ceil(maxTrend / 2)}</span><span>0</span></div>
-              <div style={{ position: 'relative', minWidth: 0 }}>
-                <svg viewBox="0 0 720 220" role="img" aria-label="Evolucion de altas de clientes" style={{ width: '100%', height: 220, display: 'block', overflow: 'visible' }} preserveAspectRatio="none">
-                  {[0, 1, 2].map((line) => <line key={line} x1="0" x2="720" y1={line * 100 + 10} y2={line * 100 + 10} stroke="var(--border-color)" strokeDasharray="4 5" />)}
-                  {(() => { const width = Math.max(trend.length - 1, 1); const points = trend.map((row, index) => { const value = numberValue(row.registered_users); const x = (index / width) * 720; const y = 210 - (value / maxTrend) * 190; return { ...row, value, x, y }; }); const line = points.map((point) => `${point.x},${point.y}`).join(' '); const area = `0,210 ${line} 720,210`; return <><polygon points={area} fill="rgba(154,205,50,0.18)" /><polyline points={line} fill="none" stroke="var(--primary)" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round" />{points.map((point) => <circle key={point.period} cx={point.x} cy={point.y} r="6" fill="var(--card-bg, #fff)" stroke="var(--primary)" strokeWidth="3"><title>{`${point.period}: ${point.value} altas`}</title></circle>)}</>; })()}
-                </svg>
-                <div style={{ display: 'flex', justifyContent: 'space-between', color: 'var(--text-secondary)', fontSize: '0.7rem', marginTop: '-0.1rem' }}><span>{trend[0]?.period ?? filters.from}</span><span>{trend[trend.length - 1]?.period ?? filters.to}</span></div>
+              <div style={{ minWidth: 0 }}>
+                <div style={{ height: 220, display: 'flex', alignItems: 'end', gap: trend.length > 16 ? '0.12rem' : '0.35rem', borderBottom: '1px solid var(--border-color)', padding: '0 0.25rem' }} role="img" aria-label="Altas de clientes por fecha">
+                  {trend.map((row) => { const value = numberValue(row.registered_users); return <div key={row.period} title={`${row.period}: ${value} altas`} style={{ height: `${Math.max((value / maxTrend) * 100, value ? 4 : 1)}%`, flex: 1, minWidth: trend.length > 16 ? 3 : 12, background: value ? 'var(--primary)' : 'rgba(154,205,50,0.18)', borderRadius: '4px 4px 0 0', position: 'relative' }}><span style={{ position: 'absolute', top: -18, left: '50%', transform: 'translateX(-50%)', fontSize: '0.65rem', color: 'var(--text-secondary)', opacity: trend.length > 12 ? 0 : 1 }}>{value}</span></div>; })}
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', color: 'var(--text-secondary)', fontSize: '0.7rem', marginTop: '0.45rem' }}><span>{trend[0]?.period ?? filters.from}</span><span>{trend[trend.length - 1]?.period ?? filters.to}</span></div>
               </div>
             </div>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: '0.55rem', marginTop: '0.85rem' }}>
@@ -201,6 +202,22 @@ export default function OwnerAnalyticsPage() {
             <div style={{ display: 'flex', justifyContent: 'space-between' }}><span>Filas sin precio</span><strong>{health.products_without_price}</strong></div>
             <div style={{ display: 'flex', justifyContent: 'space-between' }}><span>Filas sin disponibilidad</span><strong>{health.products_without_availability}</strong></div>
           </div>
+        </section>
+      </div>
+
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '1.25rem', marginTop: '1.25rem' }}>
+        <section className="card" style={{ padding: '1.1rem' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.35rem' }}><Users size={18} color="var(--primary)" /><h2 style={{ margin: 0, fontSize: '1.05rem' }}>Clientes por tienda</h2></div>
+          <p style={{ color: 'var(--text-secondary)', fontSize: '0.8rem', margin: '0 0 1rem' }}>Distribucion de los {totalShopClients} clientes registrados entre tus tiendas.</p>
+          <div style={{ display: 'grid', gap: '0.9rem' }}>{shopRows.map((row) => { const clients = numberValue(row.total_users); const share = totalShopClients ? (clients / totalShopClients) * 100 : 0; return <div key={row.shop_id}><div style={{ display: 'flex', justifyContent: 'space-between', gap: '0.6rem', fontSize: '0.78rem', marginBottom: '0.35rem' }}><strong style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{row.shop_name}</strong><span style={{ color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>{clients} · {share.toFixed(0)}%</span></div><div style={{ height: 10, background: 'var(--surface-color)', borderRadius: 999, overflow: 'hidden' }}><div style={{ width: `${(clients / maxShopClients) * 100}%`, height: '100%', background: 'var(--primary)', borderRadius: 999 }} /></div></div>; })}</div>
+          {shopRows.length === 0 && <p style={{ color: 'var(--text-secondary)', fontSize: '0.85rem' }}>No hay tiendas para este filtro.</p>}
+        </section>
+
+        <section className="card" style={{ padding: '1.1rem' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.35rem' }}><Package size={18} color="var(--primary)" /><h2 style={{ margin: 0, fontSize: '1.05rem' }}>Disponibilidad por tienda</h2></div>
+          <p style={{ color: 'var(--text-secondary)', fontSize: '0.8rem', margin: '0 0 1rem' }}>Detecta donde conviene reponer productos.</p>
+          <div style={{ display: 'grid', gap: '1rem' }}>{shopRows.map((row) => { const available = numberValue(row.available_products); const total = numberValue(row.total_products); const soldOut = Math.max(total - available, numberValue(row.out_of_stock_products)); const availableWidth = total ? (available / total) * 100 : 0; const soldOutWidth = total ? (soldOut / total) * 100 : 0; return <div key={row.shop_id}><div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.78rem', marginBottom: '0.35rem' }}><strong>{row.shop_name}</strong><span style={{ color: 'var(--text-secondary)' }}>{available}/{total} disponibles</span></div><div style={{ display: 'flex', height: 14, borderRadius: 4, overflow: 'hidden', background: 'var(--surface-color)' }}><div title={`${available} disponibles`} style={{ width: `${availableWidth}%`, background: '#84cc16' }} /><div title={`${soldOut} agotados`} style={{ width: `${soldOutWidth}%`, background: '#f59e0b' }} /></div><div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '0.35rem', color: 'var(--text-secondary)', fontSize: '0.7rem' }}><span><i style={{ display: 'inline-block', width: 7, height: 7, borderRadius: '50%', background: '#84cc16', marginRight: 4 }} />Disponibles {available}</span><span><i style={{ display: 'inline-block', width: 7, height: 7, borderRadius: '50%', background: '#f59e0b', marginRight: 4 }} />Agotados {soldOut}</span></div></div>; })}</div>
+          {shopRows.length === 0 && <p style={{ color: 'var(--text-secondary)', fontSize: '0.85rem' }}>No hay tiendas para este filtro.</p>}
         </section>
       </div>
 
