@@ -51,7 +51,6 @@ Resources:
       KeyName: !Ref KeyName
       IamInstanceProfile: LabInstanceProfile
       SubnetId: !Ref PublicSubnet
-      AssociatePublicIpAddress: true
       SecurityGroupIds:
         - !Ref IngestSecurityGroup
       Tags:
