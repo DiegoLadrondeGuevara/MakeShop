@@ -16,7 +16,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 OWNER_EMAIL = os.getenv("HISTORY_OWNER_EMAIL", "owner1@prod.seed")
-CLIENT_AGE_DAYS = (352, 318, 281, 244, 211, 176, 143, 98, 46, 9)
+CLIENT_AGE_DAYS = (360, 330, 330, 270, 240, 180, 120, 120, 45, 7)
 PRODUCT_AGE_DAYS = (360, 344, 329, 301, 286, 263, 241, 218, 197, 181, 165, 149,
                     132, 118, 104, 91, 79, 68, 57, 48, 39, 31, 25, 20, 16, 13, 10, 7, 4, 2)
 

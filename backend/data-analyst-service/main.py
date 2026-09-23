@@ -212,16 +212,25 @@ ORDER BY total_products DESC, shop_name
 
 def _trend_query(owner_id: str, start: date, end: date, shop_id: str | None) -> str:
     created_date = _created_date()
+    period_days = (end - start).days + 1
+    bucket = (
+        f"date_trunc('month', {created_date})" if period_days > 180
+        else f"date_trunc('week', {created_date})" if period_days > 45
+        else created_date
+    )
     return f"""
 WITH owner_shops AS (
     SELECT id FROM shops_csv s WHERE s.owner_id = {owner_id}{_shop_filter(shop_id)}
+), trend_buckets AS (
+    SELECT {bucket} AS period,
+           COUNT(DISTINCT u.id) AS registered_users
+    FROM users u JOIN owner_shops s ON u.shop_id = s.id
+    WHERE UPPER(COALESCE(u.role, '')) <> 'OWNER'
+      AND {created_date} BETWEEN {_date_literal(start)} AND {_date_literal(end)}
+    GROUP BY {bucket}
 )
-SELECT CAST({created_date} AS VARCHAR) AS period,
-       COUNT(DISTINCT u.id) AS registered_users
-FROM users u JOIN owner_shops s ON u.shop_id = s.id
-WHERE UPPER(COALESCE(u.role, '')) <> 'OWNER'
-  AND {created_date} BETWEEN {_date_literal(start)} AND {_date_literal(end)}
-GROUP BY {created_date}
+SELECT CAST(period AS VARCHAR) AS period, registered_users
+FROM trend_buckets
 ORDER BY period
 """
 
