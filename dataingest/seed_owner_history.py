@@ -58,7 +58,7 @@ def main() -> None:
         with pg.cursor() as cursor:
             cursor.execute(
                 """SELECT id FROM users
-                   WHERE role = 'CLIENT' AND shop_id = ANY(%s)
+                   WHERE role = 'CLIENT' AND shop_id = ANY(%s::uuid[])
                    ORDER BY shop_id, email""",
                 (shop_ids,),
             )
