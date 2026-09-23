@@ -1,0 +1,113 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: "MakeShop: VM de ingesta Docker para seed, extracción y carga a S3"
+
+Parameters:
+  AMI:
+    Type: AWS::EC2::Image::Id
+    Default: ami-08d434e92c0cfa0c0
+  KeyName:
+    Type: AWS::EC2::KeyPair::KeyName
+    Default: vockey
+  InstanceType:
+    Type: String
+    Default: t3.small
+    AllowedValues: [t3.micro, t3.small, t3.medium]
+  VpcId:
+    Type: AWS::EC2::VPC::Id
+  PublicSubnet:
+    Type: AWS::EC2::Subnet::Id
+  DbHost:
+    Type: String
+    Description: "Elastic IP de la EC2 de bases de datos"
+  IngestBucket:
+    Type: String
+  RepositoryUrl:
+    Type: String
+    Default: https://github.com/Lazheart/MakeShop.git
+  RepositoryBranch:
+    Type: String
+    Default: main
+
+Resources:
+  IngestSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: "VM de ingesta: SSH y salida a DB/S3"
+      VpcId: !Ref VpcId
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+          CidrIp: 0.0.0.0/0
+      Tags:
+        - Key: Name
+          Value: !Sub "${AWS::StackName}-security-group"
+
+  IngestServer:
+    Type: AWS::EC2::Instance
+    Properties:
+      ImageId: !Ref AMI
+      InstanceType: !Ref InstanceType
+      KeyName: !Ref KeyName
+      IamInstanceProfile: LabInstanceProfile
+      SubnetId: !Ref PublicSubnet
+      AssociatePublicIpAddress: true
+      SecurityGroupIds:
+        - !Ref IngestSecurityGroup
+      Tags:
+        - Key: Name
+          Value: MV-MakeShop-Ingesta
+      UserData:
+        Fn::Base64: !Sub |
+          #!/bin/bash
+          set -euxo pipefail
+          exec > /var/log/ingest-user-data.log 2>&1
+
+          apt-get update
+          DEBIAN_FRONTEND=noninteractive apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin git python3-venv
+          systemctl enable --now docker
+          usermod -aG docker ubuntu || true
+
+          cd /home/ubuntu
+          rm -rf MakeShop
+          git clone --branch "${RepositoryBranch}" "${RepositoryUrl}" MakeShop
+          chown -R ubuntu:ubuntu MakeShop
+          cd MakeShop/dataingest
+
+          cat > .env <<EOF
+          POSTGRES_HOST=${DbHost}
+          POSTGRES_PORT=5432
+          POSTGRES_DB=userdb
+          POSTGRES_USER=admin
+          POSTGRES_PASSWORD=admin123
+          MYSQL_HOST=${DbHost}
+          MYSQL_PORT=3307
+          MYSQL_DB=shopdb
+          MYSQL_USER=admin
+          MYSQL_PASSWORD=admin123
+          MONGO_URI=mongodb://admin:admin123@${DbHost}:27017/productdb?authSource=admin
+          MONGO_DB=productdb
+          AWS_REGION=${AWS::Region}
+          AWS_DEFAULT_REGION=${AWS::Region}
+          S3_BUCKET=${IngestBucket}
+          NUM_SHOPS=1000
+          PRODUCTS_PER_SHOP=17
+          USERS_PER_SHOP=0
+          EOF
+
+          chown ubuntu:ubuntu .env
+          docker compose config
+          python3 -m venv .venv
+          .venv/bin/pip install -r requirements.txt
+          chmod +x run_pipeline.sh
+          chown -R ubuntu:ubuntu /home/ubuntu/MakeShop
+
+Outputs:
+  IngestInstanceId:
+    Value: !Ref IngestServer
+  IngestPublicIP:
+    Value: !GetAtt IngestServer.PublicIp
+  IngestPrivateIP:
+    Value: !GetAtt IngestServer.PrivateIp
+  IngestWorkspace:
+    Value: /home/ubuntu/MakeShop/dataingest

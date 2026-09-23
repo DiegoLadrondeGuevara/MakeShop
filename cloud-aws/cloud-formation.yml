@@ -434,7 +434,7 @@ Resources:
           DB_NAME=userdb
           JPA_DDL_AUTO=update
           APP_BASE_URL=https://${HttpApi}.execute-api.${AWS::Region}.amazonaws.com
-          JWT_SECRET=${AWS::StackId}
+          JWT_SECRET=$(printf '%s' '${AWS::StackId}' | base64 -w0)
           JWT_EXPIRATION=86400000
           MYSQL_ROOT_PASSWORD=admin123
           MYSQL_DATABASE=shopdb
@@ -506,7 +506,7 @@ Resources:
           DB_NAME=userdb
           JPA_DDL_AUTO=update
           APP_BASE_URL=https://${HttpApi}.execute-api.${AWS::Region}.amazonaws.com
-          JWT_SECRET=${AWS::StackId}
+          JWT_SECRET=$(printf '%s' '${AWS::StackId}' | base64 -w0)
           JWT_EXPIRATION=86400000
           MYSQL_ROOT_PASSWORD=admin123
           MYSQL_DATABASE=shopdb

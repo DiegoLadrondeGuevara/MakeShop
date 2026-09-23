@@ -73,7 +73,7 @@ def test_write_json_creates_valid_json(tmp_path):
     write_json(records, filepath)
 
     with open(filepath, encoding="utf-8") as f:
-        loaded = json.load(f)
+        loaded = [json.loads(line) for line in f if line.strip()]
 
     assert len(loaded) == 1
     assert loaded[0]["name"] == "Producto A"
@@ -86,7 +86,7 @@ def test_write_json_writes_empty_array(tmp_path):
     write_json([], filepath)
 
     with open(filepath, encoding="utf-8") as f:
-        loaded = json.load(f)
+        loaded = [json.loads(line) for line in f if line.strip()]
 
     assert loaded == []
 
