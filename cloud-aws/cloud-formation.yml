@@ -638,6 +638,8 @@ Resources:
 
   DbServer:
     Type: AWS::EC2::Instance
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
     Properties:
       Tags:
         - Key: "Name"
@@ -706,6 +708,8 @@ Resources:
 
   ImagesBucket:
     Type: AWS::S3::Bucket
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
     Properties:
       BucketName: !Sub "makeshop-products-${AWS::AccountId}"
       PublicAccessBlockConfiguration:
@@ -716,6 +720,8 @@ Resources:
 
   ProfilePictureBucket:
     Type: AWS::S3::Bucket
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
     Properties:
       BucketName: !Sub "makeshop-profile-pictures-${AWS::AccountId}"
       PublicAccessBlockConfiguration:

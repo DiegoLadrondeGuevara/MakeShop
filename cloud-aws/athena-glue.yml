@@ -23,6 +23,8 @@ Resources:
   # ── S3: bucket de ingesta ──────────────────────────────────────────────────
   IngestBucket:
     Type: AWS::S3::Bucket
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
     Properties:
       BucketName: !Sub "openstore-ingest-${AWS::AccountId}"
       PublicAccessBlockConfiguration:

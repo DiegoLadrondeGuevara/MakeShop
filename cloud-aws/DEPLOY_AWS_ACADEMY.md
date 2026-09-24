@@ -91,6 +91,24 @@ El script:
 - inicia el build de Amplify
 - muestra outputs finales
 
+## 3.1. Actualizar una cuenta existente sin arriesgar datos
+
+Si la cuenta ya tiene el stack principal desplegado y solo quieres aplicar la versión protegida, usa el script de actualización segura:
+
+```bash
+cd MakeShop/cloud-aws
+chmod +x UPDATE_SECURITY_SAFE.sh
+./UPDATE_SECURITY_SAFE.sh
+```
+
+El script crea un CloudFormation Change Set, muestra los recursos que cambiarían y bloquea la ejecución si detecta reemplazo o eliminación de la instancia de DB, la EIP de DB o buckets con datos. Para ejecutarlo sin confirmación interactiva:
+
+```bash
+AUTO_APPROVE=1 ./UPDATE_SECURITY_SAFE.sh
+```
+
+Despues de la actualización, usa el output `HttpApiEndpoint` como backend público. No uses `LoadBalancerDNS` desde el frontend: el ALB ahora es interno y solo debe recibir tráfico desde API Gateway por VPC Link.
+
 ## 4. Verificar backend
 
 Al terminar, copia el output `HttpApiEndpoint` y prueba:
