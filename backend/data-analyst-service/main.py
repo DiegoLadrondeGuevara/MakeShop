@@ -4,7 +4,7 @@ import os
 import re
 import time
 from datetime import date, timedelta
-from typing import Any
+from typing import Any, Literal
 
 import boto3
 import httpx
@@ -210,14 +210,22 @@ ORDER BY total_products DESC, shop_name
 """
 
 
-def _trend_query(owner_id: str, start: date, end: date, shop_id: str | None) -> str:
+TrendGranularity = Literal["day", "week", "month", "year"]
+
+
+def _trend_bucket(created_date: str, granularity: TrendGranularity) -> str:
+    if granularity == "day":
+        return created_date
+    if granularity == "week":
+        return f"date_trunc('week', {created_date})"
+    if granularity == "year":
+        return f"date_trunc('year', {created_date})"
+    return f"date_trunc('month', {created_date})"
+
+
+def _trend_query(owner_id: str, start: date, end: date, shop_id: str | None, granularity: TrendGranularity) -> str:
     created_date = _created_date()
-    period_days = (end - start).days + 1
-    bucket = (
-        f"date_trunc('month', {created_date})" if period_days > 180
-        else f"date_trunc('week', {created_date})" if period_days > 45
-        else created_date
-    )
+    bucket = _trend_bucket(created_date, granularity)
     return f"""
 WITH owner_shops AS (
     SELECT id FROM shops_csv s WHERE s.owner_id = {owner_id}{_shop_filter(shop_id)}
@@ -316,12 +324,15 @@ def owner_trend(
     from_date: date | None = Query(default=None, alias="from"),
     to_date: date | None = Query(default=None, alias="to"),
     shop_id: str | None = Query(default=None, alias="shopId"),
+    granularity: TrendGranularity = Query(default="month"),
     authorization: str | None = Header(default=None),
 ) -> dict[str, Any]:
     user = _current_user_sync(authorization)
     start, end, previous_start, previous_end = _period(from_date, to_date)
-    rows = _run_athena_query(_trend_query(_owner_context(user), start, end, shop_id))
-    return _payload(rows, _filter_payload(start, end, previous_start, previous_end, shop_id))
+    rows = _run_athena_query(_trend_query(_owner_context(user), start, end, shop_id, granularity))
+    filters = _filter_payload(start, end, previous_start, previous_end, shop_id)
+    filters["granularity"] = granularity
+    return _payload(rows, filters)
 
 
 @app.get("/analytics/owner/products", tags=["Analytics"])

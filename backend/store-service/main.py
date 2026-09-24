@@ -658,6 +658,20 @@ def _analytics_query_path(path: str, from_date: str | None, to_date: str | None,
 	return f"{path}?{query}" if query else path
 
 
+def _analytics_trend_query_path(
+	path: str,
+	from_date: str | None,
+	to_date: str | None,
+	shop_id: str | None,
+	granularity: str | None,
+) -> str:
+	from urllib.parse import urlencode
+
+	params = [("from", from_date), ("to", to_date), ("shopId", shop_id), ("granularity", granularity)]
+	query = urlencode([(key, value) for key, value in params if value])
+	return f"{path}?{query}" if query else path
+
+
 @app.get("/analytics/owner/shops", tags=["Analytics"], summary="Metricas por tienda del owner")
 async def analytics_owner_shops(
 	from_date: str | None = Query(default=None, alias="from"),
@@ -674,9 +688,10 @@ async def analytics_owner_trend(
 	from_date: str | None = Query(default=None, alias="from"),
 	to_date: str | None = Query(default=None, alias="to"),
 	shop_id: str | None = Query(default=None, alias="shopId"),
+	granularity: str | None = Query(default="month"),
 	authorization: str | None = Header(default=None),
 ) -> Any:
-	path = _analytics_query_path("/analytics/owner/trend", from_date, to_date, shop_id)
+	path = _analytics_trend_query_path("/analytics/owner/trend", from_date, to_date, shop_id, granularity)
 	return await _forward("GET", data_analyst_url(path), authorization=authorization)
 
 

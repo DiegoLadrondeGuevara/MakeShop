@@ -30,7 +30,9 @@ import { getCurrentUser, getMe } from '../../api/user-service/user-service';
 
 const isoDate = (value: Date) => value.toISOString().slice(0, 10);
 const today = new Date();
-const defaultFrom = new Date(today.getTime() - 29 * 24 * 60 * 60 * 1000);
+const defaultFrom = new Date(today.getTime() - 365 * 24 * 60 * 60 * 1000);
+const granularityLabels = { day: 'Dia', week: 'Semana', month: 'Mes', year: 'Anio' } as const;
+type TrendGranularity = keyof typeof granularityLabels;
 
 const numberValue = (value: string | number | undefined) => Number(value ?? 0) || 0;
 const money = (value: string | number | undefined) =>
@@ -38,6 +40,15 @@ const money = (value: string | number | undefined) =>
 const percent = (value: number) => `${Math.round(value)}%`;
 const getShopId = (shop: Shop) => String(shop.shopId ?? shop.id ?? '');
 const getShopName = (shop: Shop) => shop.shopName ?? shop.name ?? 'Tienda';
+const formatTrendPeriod = (period: string, granularity: TrendGranularity) => {
+  const value = period.slice(0, 10);
+  const date = new Date(`${value}T00:00:00`);
+  if (Number.isNaN(date.getTime())) return period;
+  if (granularity === 'year') return String(date.getFullYear());
+  if (granularity === 'month') return new Intl.DateTimeFormat('es-PE', { month: 'short', year: 'numeric' }).format(date);
+  if (granularity === 'week') return `Sem. ${new Intl.DateTimeFormat('es-PE', { day: '2-digit', month: 'short' }).format(date)}`;
+  return new Intl.DateTimeFormat('es-PE', { day: '2-digit', month: 'short' }).format(date);
+};
 
 const emptySummary: OwnerSummary = {
   total_shops: '0', total_products: '0', available_products: '0', out_of_stock_products: '0',
@@ -64,7 +75,12 @@ function Metric({ icon, label, value, detail, tone = 'primary' }: { icon: ReactN
 }
 
 export default function OwnerAnalyticsPage() {
-  const [filters, setFilters] = useState({ from: isoDate(defaultFrom), to: isoDate(today), shopId: '' });
+  const [filters, setFilters] = useState<{ from: string; to: string; shopId: string; granularity: TrendGranularity }>({
+    from: isoDate(defaultFrom),
+    to: isoDate(today),
+    shopId: '',
+    granularity: 'month',
+  });
   const [shops, setShops] = useState<Shop[]>([]);
   const [summary, setSummary] = useState<OwnerSummary>(emptySummary);
   const [shopRows, setShopRows] = useState<ShopAnalytics[]>([]);
@@ -110,7 +126,7 @@ export default function OwnerAnalyticsPage() {
   useEffect(() => { void loadShops(); }, []);
   // The loader reads the current filter values; rerun only when those values change.
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  useEffect(() => { void loadAnalytics(); }, [filters.from, filters.to, filters.shopId]);
+  useEffect(() => { void loadAnalytics(); }, [filters.from, filters.to, filters.shopId, filters.granularity]);
 
   const registered = numberValue(summary.registered_in_period);
   const previousRegistered = numberValue(summary.registered_in_previous_period);
@@ -156,6 +172,7 @@ export default function OwnerAnalyticsPage() {
           <label style={{ fontSize: '0.78rem', color: 'var(--text-secondary)' }}>Desde<input className="input-field" type="date" value={filters.from} onChange={(event) => setFilters((current) => ({ ...current, from: event.target.value }))} /></label>
           <label style={{ fontSize: '0.78rem', color: 'var(--text-secondary)' }}>Hasta<input className="input-field" type="date" value={filters.to} onChange={(event) => setFilters((current) => ({ ...current, to: event.target.value }))} /></label>
           <label style={{ fontSize: '0.78rem', color: 'var(--text-secondary)' }}>Tienda<select className="input-field" value={filters.shopId} onChange={(event) => setFilters((current) => ({ ...current, shopId: event.target.value }))}><option value="">Todas mis tiendas</option>{shops.map((shop) => <option key={getShopId(shop)} value={getShopId(shop)}>{getShopName(shop)}</option>)}</select></label>
+          <label style={{ fontSize: '0.78rem', color: 'var(--text-secondary)' }}>Agrupar grafico<select className="input-field" value={filters.granularity} onChange={(event) => setFilters((current) => ({ ...current, granularity: event.target.value as TrendGranularity }))}>{Object.entries(granularityLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>
         </div>
       </div>
 
@@ -171,7 +188,7 @@ export default function OwnerAnalyticsPage() {
       <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1.35fr) minmax(280px, 0.65fr)', gap: '1.25rem', alignItems: 'start' }}>
         <section className="card" style={{ padding: '1.1rem' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', gap: '1rem', alignItems: 'start' }}>
-            <div><div style={{ display: 'flex', alignItems: 'center', gap: '0.45rem' }}><ChartNoAxesCombined size={18} color="var(--primary)" /><h2 style={{ margin: 0, fontSize: '1.05rem' }}>Evolucion de altas</h2></div><p style={{ color: 'var(--text-secondary)', fontSize: '0.8rem', margin: '0.35rem 0 1.2rem' }}>Nuevos clientes registrados por fecha. Comparacion contra los {summary.registered_in_previous_period} del periodo anterior.</p></div>
+            <div><div style={{ display: 'flex', alignItems: 'center', gap: '0.45rem' }}><ChartNoAxesCombined size={18} color="var(--primary)" /><h2 style={{ margin: 0, fontSize: '1.05rem' }}>Evolucion de altas</h2></div><p style={{ color: 'var(--text-secondary)', fontSize: '0.8rem', margin: '0.35rem 0 1.2rem' }}>Nuevos clientes agrupados por {granularityLabels[filters.granularity].toLowerCase()}. Comparacion contra los {summary.registered_in_previous_period} del periodo anterior.</p></div>
             <div style={{ color: variation >= 0 ? '#16a34a' : '#dc2626', display: 'flex', alignItems: 'center', gap: '0.25rem', fontWeight: 750, whiteSpace: 'nowrap' }}>{variation >= 0 ? <TrendingUp size={17} /> : <TrendingDown size={17} />}{variation.toFixed(0)}%</div>
           </div>
           {trend.length === 0 ? <div style={{ minHeight: 220, display: 'grid', placeItems: 'center', color: 'var(--text-secondary)', fontSize: '0.85rem' }}>No hay registros en este periodo.</div> : <>
@@ -179,15 +196,15 @@ export default function OwnerAnalyticsPage() {
               <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'space-between', padding: '0.25rem 0', color: 'var(--text-secondary)', fontSize: '0.7rem', textAlign: 'right' }}><span>{maxTrend}</span><span>{Math.ceil(maxTrend / 2)}</span><span>0</span></div>
               <div style={{ minWidth: 0 }}>
                 <div style={{ height: 220, display: 'flex', alignItems: 'end', gap: trend.length > 16 ? '0.12rem' : '0.35rem', borderBottom: '1px solid var(--border-color)', padding: '0 0.25rem' }} role="img" aria-label="Altas de clientes por fecha">
-                  {trend.map((row) => { const value = numberValue(row.registered_users); return <div key={row.period} title={`${row.period}: ${value} altas`} style={{ height: `${Math.max((value / maxTrend) * 100, value ? 4 : 1)}%`, flex: 1, minWidth: trend.length > 16 ? 3 : 12, background: value ? 'var(--primary)' : 'rgba(154,205,50,0.18)', borderRadius: '4px 4px 0 0', position: 'relative' }}><span style={{ position: 'absolute', top: -18, left: '50%', transform: 'translateX(-50%)', fontSize: '0.65rem', color: 'var(--text-secondary)', opacity: trend.length > 12 ? 0 : 1 }}>{value}</span></div>; })}
+                  {trend.map((row) => { const value = numberValue(row.registered_users); const periodLabel = formatTrendPeriod(row.period, filters.granularity); return <div key={row.period} title={`${periodLabel}: ${value} altas`} style={{ height: `${Math.max((value / maxTrend) * 100, value ? 4 : 1)}%`, flex: 1, minWidth: trend.length > 16 ? 3 : 12, background: value ? 'var(--primary)' : 'rgba(154,205,50,0.18)', borderRadius: '4px 4px 0 0', position: 'relative' }}><span style={{ position: 'absolute', top: -18, left: '50%', transform: 'translateX(-50%)', fontSize: '0.65rem', color: 'var(--text-secondary)', opacity: trend.length > 12 ? 0 : 1 }}>{value}</span></div>; })}
                 </div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', color: 'var(--text-secondary)', fontSize: '0.7rem', marginTop: '0.45rem' }}><span>{trend[0]?.period ?? filters.from}</span><span>{trend[trend.length - 1]?.period ?? filters.to}</span></div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', color: 'var(--text-secondary)', fontSize: '0.7rem', marginTop: '0.45rem' }}><span>{trend[0] ? formatTrendPeriod(trend[0].period, filters.granularity) : filters.from}</span><span>{trend[trend.length - 1] ? formatTrendPeriod(trend[trend.length - 1].period, filters.granularity) : filters.to}</span></div>
               </div>
             </div>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: '0.55rem', marginTop: '0.85rem' }}>
               <div style={{ padding: '0.7rem', background: 'rgba(154,205,50,0.1)', borderRadius: 6 }}><div style={{ color: 'var(--text-secondary)', fontSize: '0.7rem' }}>Altas del periodo</div><strong style={{ fontSize: '1.15rem' }}>{trendTotal}</strong></div>
-              <div style={{ padding: '0.7rem', background: 'rgba(154,205,50,0.1)', borderRadius: 6 }}><div style={{ color: 'var(--text-secondary)', fontSize: '0.7rem' }}>Promedio por fecha</div><strong style={{ fontSize: '1.15rem' }}>{trendAverage.toFixed(1)}</strong></div>
-              <div style={{ padding: '0.7rem', background: 'rgba(154,205,50,0.1)', borderRadius: 6 }}><div style={{ color: 'var(--text-secondary)', fontSize: '0.7rem' }}>Pico de altas</div><strong style={{ fontSize: '1.15rem' }}>{peakTrend?.value ?? 0}</strong><div style={{ color: 'var(--text-secondary)', fontSize: '0.68rem' }}>{peakTrend?.period ?? '-'}</div></div>
+              <div style={{ padding: '0.7rem', background: 'rgba(154,205,50,0.1)', borderRadius: 6 }}><div style={{ color: 'var(--text-secondary)', fontSize: '0.7rem' }}>Promedio por {granularityLabels[filters.granularity].toLowerCase()}</div><strong style={{ fontSize: '1.15rem' }}>{trendAverage.toFixed(1)}</strong></div>
+              <div style={{ padding: '0.7rem', background: 'rgba(154,205,50,0.1)', borderRadius: 6 }}><div style={{ color: 'var(--text-secondary)', fontSize: '0.7rem' }}>Pico de altas</div><strong style={{ fontSize: '1.15rem' }}>{peakTrend?.value ?? 0}</strong><div style={{ color: 'var(--text-secondary)', fontSize: '0.68rem' }}>{peakTrend ? formatTrendPeriod(peakTrend.period, filters.granularity) : '-'}</div></div>
             </div>
             <div style={{ display: 'flex', justifyContent: 'space-between', gap: '0.75rem', marginTop: '0.7rem', color: 'var(--text-secondary)', fontSize: '0.75rem' }}><span>{trendDirection >= 0 ? 'La tendencia termina al alza' : 'La tendencia termina a la baja'}</span><strong style={{ color: trendDirection >= 0 ? '#16a34a' : '#dc2626' }}>{trendDirectionPercent.toFixed(0)}% vs. inicio</strong></div>
           </>}

@@ -4,6 +4,7 @@ export interface AnalyticsFilters {
   from?: string;
   to?: string;
   shopId?: string;
+  granularity?: 'day' | 'week' | 'month' | 'year';
 }
 
 export interface AnalyticsResponse<T> {
@@ -66,6 +67,7 @@ const buildParams = (filters: AnalyticsFilters = {}) => {
   if (filters.from) params.set('from', filters.from);
   if (filters.to) params.set('to', filters.to);
   if (filters.shopId) params.set('shopId', filters.shopId);
+  if (filters.granularity) params.set('granularity', filters.granularity);
   return params;
 };
 
