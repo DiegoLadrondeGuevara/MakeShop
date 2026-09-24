@@ -85,7 +85,7 @@
             </article>
             <article class="feature-card">
               <h3>backend/docker-compose.yml</h3>
-              <p>Arranca <code>user-service</code>, <code>shop-service</code>, <code>product-service</code> y <code>store-service</code> con healthchecks y variables de entorno predefinidas.</p>
+              <p>Arranca <code>user-service</code>, <code>shop-service</code>, <code>product-service</code>, <code>store-service</code> y <code>data-analyst-service</code> con healthchecks y variables de entorno predefinidas.</p>
             </article>
           </div>
           <div class="table-wrap">
@@ -93,7 +93,7 @@
               <thead><tr><th>Archivo</th><th>Qué arranca</th><th>Nota</th></tr></thead>
               <tbody>
                 <tr><td><code>database/docker-compose.yml</code></td><td>PostgreSQL · MySQL · MongoDB</td><td>Volúmenes persistentes locales</td></tr>
-                <tr><td><code>backend/docker-compose.yml</code></td><td>user · shop · product · store services</td><td>Healthchecks y redes internas listos</td></tr>
+                <tr><td><code>backend/docker-compose.yml</code></td><td>user · shop · product · store · data-analyst</td><td>Healthchecks y red interna</td></tr>
               </tbody>
             </table>
           </div>
@@ -132,7 +132,7 @@
           </div>
 
           <div class="callout callout-info">
-             Con cuentas limitadas se recomienda usar el rol proporcionado por la institución educativa para el despliegue. Aunque esto sea una vulnerabilidad de seguridad.
+            En AWS Academy se utiliza el rol proporcionado por el Learner Lab, sujeto a los permisos disponibles en la cuenta.
           </div>
 
         <nav class="page-nav" aria-label="Navegación de páginas">

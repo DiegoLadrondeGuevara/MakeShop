@@ -51,7 +51,7 @@
         <header class="page-header">
           <p class="page-kicker">Data Ingest</p>
           <h1>Pipeline de ingesta con boto3, S3 y Athena</h1>
-          <p class="page-lead">Scripts Python que extraen datos de las tres bases operativas, los transforman a formatos portables y los publican en S3 para que <code>store-service</code> los consulte a través de Athena.</p>
+          <p class="page-lead">Scripts Python que extraen datos de las tres bases operativas, los transforman a formatos portables y los publican en S3. Glue cataloga los archivos y <code>data-analyst-service</code> ejecuta las consultas en Athena.</p>
         </header>
 
         <section class="doc-section">
@@ -75,7 +75,7 @@
             </article>
             <article class="feature-card">
               <h3>5. Consumo analítico vía Athena</h3>
-              <p><code>store-service</code> consulta Athena para construir métricas por tienda, usuarios y membresías sin depender de consultas ad hoc a las bases operativas.</p>
+              <p><code>data-analyst-service</code> ejecuta las consultas Athena y <code>store-service</code> expone esas rutas al frontend como parte de la API pública.</p>
             </article>
           </div>
         </section>
@@ -85,7 +85,7 @@
           <div class="card-grid two-up">
             <article class="feature-card">
               <h3>SDK oficial de Python para AWS</h3>
-              <p>Habla con S3 y Athena sin depender de scripts manuales o procesos externos. El mismo código funciona en local, EC2 o contenedores.</p>
+              <p>Los contenedores de ingesta usan boto3 para publicar los archivos en S3. El microservicio analítico usa el mismo SDK para ejecutar y leer consultas de Athena.</p>
             </article>
             <article class="feature-card">
               <h3>Autenticación por IAM</h3>
@@ -97,7 +97,7 @@
             </article>
             <article class="feature-card">
               <h3>Encaje con el stack</h3>
-              <p>Python ya es la base de <code>store-service</code> y <code>product-service</code>, así que boto3 no introduce otra dependencia de plataforma.</p>
+              <p>Python ya se usa en <code>store-service</code>, <code>product-service</code>, <code>data-analyst-service</code> y los contenedores de ingesta, por lo que boto3 encaja en el stack existente.</p>
             </article>
           </div>
         </section>

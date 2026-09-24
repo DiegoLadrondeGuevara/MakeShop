@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>MakeShop | Infrastructure</title>
-  <meta name="description" content="Arquitectura e infraestructura de MakeShop: diagramas ER, AWS (EC2, ALB, S3, Amplify) y atributos de base de datos." />
+  <meta name="description" content="Arquitectura e infraestructura de MakeShop: API Gateway, VPC Link, ALB interno, EC2, S3, Glue/Athena y Amplify." />
   <link rel="stylesheet" href="../styles/style.css" />
   <script defer src="../scripts/main.js"></script>
   <script defer src="../scripts/scaleimages.js"></script>
@@ -73,15 +73,19 @@
           <div class="card-grid two-up">
             <article class="feature-card">
               <h3>CloudFormation</h3>
-              <p>Declara ALB, instancias EC2, Security Groups, buckets S3 y la app Amplify en un solo template para que el despliegue sea repetible en cualquier cuenta.</p>
+              <p>Declara API Gateway, VPC Link, ALB interno, instancias EC2, Security Groups, buckets S3 y Amplify para mantener el despliegue versionado.</p>
             </article>
             <article class="feature-card">
               <h3>EC2 + ALB</h3>
-              <p>Las APIs viven en instancias EC2 detrás de un Application Load Balancer que expone la entrada pública por HTTP y enruta el tráfico a los contenedores correctos.</p>
+              <p>Los cinco microservicios corren en dos EC2 de aplicación detrás de un ALB interno. La entrada pública HTTPS es API Gateway, conectado al balanceador mediante VPC Link.</p>
             </article>
             <article class="feature-card">
               <h3>S3</h3>
-              <p>Almacena imágenes de productos subidas por <code>product-service</code> y los archivos analíticos producidos por la ingesta, sirviendo como origen para consultas Athena.</p>
+              <p>Almacena imágenes de productos y los archivos CSV/JSON generados por la ingesta.</p>
+            </article>
+            <article class="feature-card">
+              <h3>Glue + Athena</h3>
+              <p>Glue cataloga los archivos de ingesta y Athena los consulta desde <code>data-analyst-service</code> sin acceder directamente a las bases operativas.</p>
             </article>
             <article class="feature-card">
               <h3>Amplify</h3>

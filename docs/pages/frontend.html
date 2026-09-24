@@ -98,9 +98,27 @@
                 <tr><td><code>/login</code></td><td>Formulario de acceso</td><td>Público</td></tr>
                 <tr><td><code>/signup</code></td><td>Registro de nueva cuenta</td><td>Público</td></tr>
                 <tr><td><code>/owner</code></td><td>Panel del dueño de tienda</td><td>Requiere sesión OWNER</td></tr>
+                <tr><td><code>/owner/analytics</code></td><td>Panel de métricas consultadas desde Athena</td><td>Requiere sesión OWNER</td></tr>
                 <tr><td><code>/admin</code></td><td>Panel de administración</td><td>Requiere sesión ADMIN</td></tr>
                 <tr><td><code>/profile</code></td><td>Perfil de usuario</td><td>Requiere sesión</td></tr>
                 <tr><td><code>/:shopSlug?id=…</code></td><td>Storefront público de una tienda</td><td>Ruta dinámica</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
+
+        <section class="doc-section">
+          <h2 class="section-title">Consumo de los microservicios</h2>
+          <p class="section-desc">El navegador usa la URL pública de API Gateway. <code>store-service</code> enruta cada operación al microservicio correspondiente.</p>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Microservicio</th><th>Operaciones usadas por la UI</th></tr></thead>
+              <tbody>
+                <tr><td><code>user-service</code></td><td><code>POST /auth/login</code> · <code>GET /me</code></td></tr>
+                <tr><td><code>shop-service</code></td><td><code>GET /shops</code> · <code>GET /shop/{shopId}/theme</code></td></tr>
+                <tr><td><code>product-service</code></td><td><code>GET /shops/{shopId}/products</code> · <code>POST /shops/{shopId}/products</code></td></tr>
+                <tr><td><code>store-service</code></td><td><code>GET /owners/{ownerId}/shops</code> · <code>GET /owners/{ownerId}/clients</code></td></tr>
+                <tr><td><code>data-analyst-service</code></td><td><code>GET /analytics/owner/summary</code> · <code>GET /analytics/owner/shops</code></td></tr>
               </tbody>
             </table>
           </div>

@@ -18,7 +18,10 @@ Parameters:
     Type: AWS::EC2::Subnet::Id
   DbHost:
     Type: String
-    Description: "Elastic IP de la EC2 de bases de datos"
+    Description: "IP privada de la EC2 de bases de datos"
+  IngestServerSecurityGroupId:
+    Type: AWS::EC2::SecurityGroup::Id
+    Description: "Security Group autorizado por el stack principal para acceder a las bases de datos"
   IngestBucket:
     Type: String
   RepositoryUrl:
@@ -53,6 +56,7 @@ Resources:
       SubnetId: !Ref PublicSubnet
       SecurityGroupIds:
         - !Ref IngestSecurityGroup
+        - !Ref IngestServerSecurityGroupId
       Tags:
         - Key: Name
           Value: MV-MakeShop-Ingesta

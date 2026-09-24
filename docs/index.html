@@ -115,11 +115,11 @@
         <!-- CÓMO LO HACE -->
         <section class="doc-section">
           <h2 class="section-title">¿Cómo funciona? Arquitectura de microservicios</h2>
-          <p class="section-desc">El sistema está dividido en servicios independientes que se comunican entre sí a través de <code>store-service</code>, el gateway público. Cada servicio es responsable de un único dominio.</p>
+          <p class="section-desc">El sistema está dividido en cinco microservicios. El frontend entra por API Gateway y <code>store-service</code> actúa como orquestador hacia los servicios de usuarios, tiendas, productos y analítica.</p>
           <div class="card-grid two-up">
             <article class="feature-card">
               <h3><span class="card-icon">🔀</span>store-service — Gateway</h3>
-              <p>Punto de entrada público. Recibe todas las peticiones del frontend, las enruta al servicio correcto y orquesta operaciones que involucran múltiples dominios. Corre en el puerto <code>8004</code>.</p>
+              <p>Orquestador HTTP detrás de API Gateway. Recibe las peticiones del frontend, las enruta al servicio correcto y coordina operaciones entre dominios. Corre en el puerto <code>8004</code>.</p>
             </article>
             <article class="feature-card">
               <h3><span class="card-icon">👤</span>user-service — Autenticación</h3>
@@ -133,9 +133,13 @@
               <h3><span class="card-icon">📦</span>product-service — Catálogo</h3>
               <p>Maneja el catálogo de productos, subida de imágenes a <strong>S3</strong> y operaciones CRUD por tienda. Construido con <strong>FastAPI</strong> y <strong>MongoDB</strong>. Puerto <code>8000</code>.</p>
             </article>
+            <article class="feature-card">
+              <h3><span class="card-icon">📊</span>data-analyst-service — Analítica</h3>
+              <p>Ejecuta consultas sobre el catálogo de <strong>Glue/Athena</strong> y devuelve métricas del owner sin base de datos propia. Construido con <strong>FastAPI</strong>. Puerto <code>8005</code>.</p>
+            </article>
           </div>
           <div class="callout callout-info">
-            <strong>Principio clave:</strong> el frontend nunca habla directamente con user-service, shop-service o product-service. Toda petición pasa por <code>store-service</code>, que valida autenticación y ownership antes de delegar.
+            <strong>Principio clave:</strong> el frontend usa una sola URL pública de API Gateway. <code>store-service</code> delega las operaciones a user-service, shop-service, product-service y data-analyst-service.
           </div>
         </section>
 
@@ -148,7 +152,7 @@
 │   ├── src/
 │   │   ├── components/    <span class="note"># Componentes reutilizables</span>
 │   │   ├── pages/         <span class="note"># HomePage, LoginPage, OwnerPanel, AdminPanel…</span>
-│   │   ├── context/       <span class="note"># AuthContext, ThemeConfig</span>
+│   │   ├── config/        <span class="note"># AuthContext, ThemeConfig</span>
 │   │   └── App.tsx        <span class="note"># Router principal (React Router)</span>
 │   └── package.json
 ├── <span class="dir">backend/</span>
@@ -156,11 +160,12 @@
 │   ├── <span class="dir">user-service/</span>       <span class="note"># Auth Spring Boot — puerto 8080</span>
 │   ├── <span class="dir">shop-service/</span>       <span class="note"># Tiendas Express/Prisma — puerto 3000</span>
 │   ├── <span class="dir">product-service/</span>    <span class="note"># Catálogo FastAPI — puerto 8000</span>
-│   └── docker-compose.yml <span class="note"># Orquestación de servicios</span>
+│   ├── <span class="dir">data-analyst-service/</span> <span class="note"># Athena FastAPI — puerto 8005</span>
+│   └── docker-compose.yml <span class="note"># Orquestación de los 5 servicios</span>
 ├── <span class="dir">database/</span>
 │   └── docker-compose.yml  <span class="note"># PostgreSQL · MySQL · MongoDB</span>
-├── <span class="dir">ingest/</span>               <span class="note"># Scripts Python + boto3 para S3 y Athena</span>
-├── <span class="dir">cloudformation/</span>       <span class="note"># Infraestructura AWS como código</span>
+├── <span class="dir">dataingest/</span>           <span class="note"># 3 contenedores Python de ingesta hacia S3</span>
+├── <span class="dir">cloud-aws/</span>            <span class="note"># CloudFormation, API Gateway, ALB y Glue/Athena</span>
 ├── <span class="dir">docs/</span>                 <span class="note"># Esta documentación</span>
 └── <span class="dir">.github/workflows/</span>   <span class="note"># CI: build y push de imágenes Docker</span>
           </pre>
@@ -196,7 +201,7 @@
                 </tr>
                 <tr>
                   <td><a data-doc-href="pages/infrastructure.html" href="#">Infrastructure</a></td>
-                  <td>Diagramas ER, arquitectura AWS (EC2, ALB, S3, Amplify) y atributos de cada modelo de datos.</td>
+                  <td>Diagramas ER, arquitectura AWS y atributos principales de los modelos de datos.</td>
                 </tr>
               </tbody>
             </table>
