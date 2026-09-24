@@ -101,7 +101,7 @@ Resources:
   LoadBalancerSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
-      GroupDescription: "ALB interno: tráfico desde API Gateway VPC Link"
+      GroupDescription: "ALB: permitir HTTP y puertos convencionales desde internet"
       VpcId: !Ref VpcId
       SecurityGroupIngress:
         - IpProtocol: "tcp"
@@ -177,7 +177,7 @@ Resources:
   DbServerSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
-      GroupDescription: "DB Server: PostgreSQL/MySQL/Mongo solo desde App e Ingest SG"
+      GroupDescription: "DB Server: PostgreSQL/MySQL/Mongo accesibles publicamente (segun requerimiento)"
       VpcId: !Ref VpcId
       SecurityGroupIngress:
         - IpProtocol: "tcp"
